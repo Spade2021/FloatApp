@@ -10,18 +10,33 @@ import android.graphics.PixelFormat;
 import android.view.Gravity;
 import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.widget.ScrollView;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.webkit.WebSettings;
+import android.view.ViewGroup;
+import android.view.View;
+
+import com.google.mlkit.vision.common.InputImage;
+import com.google.mlkit.vision.text.TextRecognition;
+import com.google.mlkit.vision.text.TextRecognizer;
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 
 public class MainActivity extends Activity {
 
     private WindowManager wm;
     private LinearLayout panel;
     private WebView web;
+    private TextView resultText;
+
+    private static final int PICK_IMAGE = 100;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -77,6 +92,7 @@ public class MainActivity extends Activity {
 
         panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(8, 8, 8, 8);
         panel.setBackgroundColor(0xFFFFFFFF);
 
         EditText address = new EditText(this);
@@ -85,8 +101,38 @@ public class MainActivity extends Activity {
         address.setHint("Masukkan alamat website");
         address.setImeOptions(EditorInfo.IME_ACTION_GO);
 
+        LinearLayout buttons = new LinearLayout(this);
+        buttons.setOrientation(LinearLayout.HORIZONTAL);
+
+        Button scan = new Button(this);
+        scan.setText("SCAN SOAL");
+
+        Button copy = new Button(this);
+        copy.setText("SALIN");
+
         Button close = new Button(this);
         close.setText("TUTUP");
+
+        buttons.addView(scan, new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1
+        ));
+
+        buttons.addView(copy, new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1
+        ));
+
+        buttons.addView(close, new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1
+        ));
+
+        resultText = new TextView(this);
+        resultText.setText("Hasil pemindaian akan muncul di sini.");
+        resultText.setTextColor(0xFF000000);
+        resultText.setTextSize(14);
+        resultText.setPadding(8, 8, 8, 8);
+
+        ScrollView resultScroll = new ScrollView(this);
+        resultScroll.addView(resultText);
 
         web = new WebView(this);
         web.setWebViewClient(new WebViewClient());
@@ -96,16 +142,19 @@ public class MainActivity extends Activity {
         settings.setDomStorageEnabled(true);
 
         panel.addView(address);
-        panel.addView(close);
+        panel.addView(buttons);
 
-        LinearLayout.LayoutParams webParams =
+        panel.addView(resultScroll,
             new LinearLayout.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT,
-                0,
-                1
-            );
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                150
+            )
+        );
 
-        panel.addView(web, webParams);
+        panel.addView(web, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            0, 1
+        ));
 
         int width = (int) (getResources()
             .getDisplayMetrics().widthPixels * 0.90f);
@@ -140,11 +189,97 @@ public class MainActivity extends Activity {
             return true;
         });
 
+        scan.setOnClickListener(v -> selectImage());
+
+        copy.setOnClickListener(v -> {
+            ClipboardManager clipboard =
+                (ClipboardManager) getSystemService(
+                    Context.CLIPBOARD_SERVICE
+                );
+
+            clipboard.setPrimaryClip(
+                ClipData.newPlainText(
+                    "Hasil OCR",
+                    resultText.getText().toString()
+                )
+            );
+        });
+
         close.setOnClickListener(v -> {
             web.destroy();
             wm.removeView(panel);
             panel = null;
             web = null;
+            resultText = null;
         });
+    }
+
+    private void selectImage() {
+        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+        intent.setType("image/*");
+        startActivityForResult(intent, PICK_IMAGE);
+    }
+
+    @Override
+    protected void onActivityResult(
+        int requestCode,
+        int resultCode,
+        Intent data
+    ) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        if (requestCode == PICK_IMAGE
+                && resultCode == RESULT_OK
+                && data != null
+                && data.getData() != null) {
+
+            Uri imageUri = data.getData();
+
+            if (resultText != null) {
+                resultText.setText("Sedang membaca tulisan...");
+            }
+
+            try {
+                InputImage image =
+                    InputImage.fromFilePath(this, imageUri);
+
+                TextRecognizer recognizer =
+                    TextRecognition.getClient(
+                        TextRecognizerOptions.DEFAULT_OPTIONS
+                    );
+
+                recognizer.process(image)
+                    .addOnSuccessListener(result -> {
+                        if (resultText != null) {
+                            String text = result.getText();
+
+                            if (text.isEmpty()) {
+                                resultText.setText(
+                                    "Tidak ada tulisan yang ditemukan."
+                                );
+                            } else {
+                                resultText.setText(text);
+                            }
+                        }
+                        recognizer.close();
+                    })
+                    .addOnFailureListener(e -> {
+                        if (resultText != null) {
+                            resultText.setText(
+                                "Gagal membaca gambar: " +
+                                e.getMessage()
+                            );
+                        }
+                        recognizer.close();
+                    });
+
+            } catch (Exception e) {
+                if (resultText != null) {
+                    resultText.setText(
+                        "Gagal membuka gambar: " + e.getMessage()
+                    );
+                }
+            }
+        }
     }
 }
