@@ -1,83 +1,117 @@
-
 package com.spade2021.floatapp;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.content.Intent;
+import android.provider.Settings;
+import android.net.Uri;
+import android.graphics.PixelFormat;
+import android.view.Gravity;
+import android.view.WindowManager;
+import android.view.View;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.webkit.WebSettings;
-import android.widget.EditText;
-import android.widget.Button;
-import android.widget.LinearLayout;
-import android.view.View;
-import android.view.inputmethod.EditorInfo;
 
 public class MainActivity extends Activity {
-
-    private WebView webView;
-    private EditText addressBar;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        LinearLayout layout = new LinearLayout(this);
-        layout.setOrientation(LinearLayout.VERTICAL);
+        if (!Settings.canDrawOverlays(this)) {
+            Intent intent = new Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:" + getPackageName())
+            );
+            startActivity(intent);
+            return;
+        }
 
-        addressBar = new EditText(this);
-        addressBar.setSingleLine(true);
-        addressBar.setHint("Masukkan alamat website");
-        addressBar.setText("https://www.google.com");
-        addressBar.setInputType(17);
-        addressBar.setImeOptions(EditorInfo.IME_ACTION_GO);
+        showFloatingButton();
+        finish();
+    }
 
-        Button openButton = new Button(this);
-        openButton.setText("BUKA WEBSITE");
+    private void showFloatingButton() {
+        WindowManager wm =
+            (WindowManager) getSystemService(WINDOW_SERVICE);
 
-        webView = new WebView(this);
-        webView.setWebViewClient(new WebViewClient());
+        Button floatButton = new Button(this);
+        floatButton.setText("FLOAT");
 
-        WebSettings settings = webView.getSettings();
-        settings.setJavaScriptEnabled(true);
+        WindowManager.LayoutParams params =
+            new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                PixelFormat.TRANSLUCENT
+            );
 
-        layout.addView(addressBar);
-        layout.addView(openButton);
-        layout.addView(webView,
-            new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                0, 1
-            )
-        );
+        params.gravity = Gravity.TOP | Gravity.START;
+        params.x = 50;
+        params.y = 200;
 
-        setContentView(layout);
+        wm.addView(floatButton, params);
 
-        openButton.setOnClickListener(v -> openWebsite());
+        floatButton.setOnClickListener(v -> {
+            showFloatingBrowser(wm);
+        });
+    }
 
-        addressBar.setOnEditorActionListener((v, actionId, event) -> {
-            openWebsite();
+    private void showFloatingBrowser(WindowManager wm) {
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setBackgroundColor(0xFFFFFFFF);
+
+        EditText address = new EditText(this);
+        address.setSingleLine(true);
+        address.setText("https://www.google.com");
+
+        Button close = new Button(this);
+        close.setText("TUTUP");
+
+        WebView web = new WebView(this);
+        web.setWebViewClient(new WebViewClient());
+        web.getSettings().setJavaScriptEnabled(true);
+        web.loadUrl("https://www.google.com");
+
+        panel.addView(address);
+        panel.addView(close);
+        panel.addView(web, new LinearLayout.LayoutParams(
+            600, 700
+        ));
+
+        WindowManager.LayoutParams params =
+            new WindowManager.LayoutParams(
+                650,
+                850,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                PixelFormat.TRANSLUCENT
+            );
+
+        params.gravity = Gravity.CENTER;
+
+        wm.addView(panel, params);
+
+        address.setOnEditorActionListener((v, actionId, event) -> {
+            String url = address.getText().toString().trim();
+
+            if (!url.startsWith("http")) {
+                url = "https://" + url;
+            }
+
+            web.loadUrl(url);
             return true;
         });
 
-        webView.loadUrl("https://www.google.com");
-    }
-
-    private void openWebsite() {
-        String address = addressBar.getText().toString().trim();
-
-        if (!address.startsWith("http://")
-                && !address.startsWith("https://")) {
-            address = "https://" + address;
-        }
-
-        webView.loadUrl(address);
-    }
-
-    @Override
-    public void onBackPressed() {
-        if (webView.canGoBack()) {
-            webView.goBack();
-        } else {
-            super.onBackPressed();
-        }
+        close.setOnClickListener(v -> {
+            web.destroy();
+            wm.removeView(panel);
+        });
     }
 }
