@@ -1,6 +1,7 @@
 
 package com.spade2021.floatapp;
 
+import android.Manifest;
 import android.app.Activity;
 import android.os.Bundle;
 import android.content.Intent;
@@ -13,6 +14,9 @@ import android.view.inputmethod.EditorInfo;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.content.pm.PackageManager;
+import android.view.View;
+import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -21,26 +25,52 @@ import android.widget.ScrollView;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.webkit.WebSettings;
-import android.view.ViewGroup;
-import android.view.View;
 
+import androidx.activity.ComponentActivity;
+import androidx.camera.core.CameraSelector;
+import androidx.camera.core.ImageAnalysis;
+import androidx.camera.core.ImageProxy;
+import androidx.camera.core.Preview;
+import androidx.camera.lifecycle.ProcessCameraProvider;
+import androidx.camera.view.PreviewView;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.text.TextRecognition;
 import com.google.mlkit.vision.text.TextRecognizer;
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 
-public class MainActivity extends Activity {
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+public class MainActivity extends ComponentActivity {
 
     private WindowManager wm;
     private LinearLayout panel;
     private WebView web;
     private TextView resultText;
+    private PreviewView previewView;
+
+    private ProcessCameraProvider cameraProvider;
+    private ExecutorService cameraExecutor;
+    private TextRecognizer recognizer;
+
+    private final AtomicBoolean processing = new AtomicBoolean(false);
 
     private static final int PICK_IMAGE = 100;
+    private static final int CAMERA_PERMISSION = 101;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        cameraExecutor = Executors.newSingleThreadExecutor();
+        recognizer = TextRecognition.getClient(
+            TextRecognizerOptions.DEFAULT_OPTIONS
+        );
 
         if (!Settings.canDrawOverlays(this)) {
             Intent intent = new Intent(
@@ -105,7 +135,10 @@ public class MainActivity extends Activity {
         buttons.setOrientation(LinearLayout.HORIZONTAL);
 
         Button scan = new Button(this);
-        scan.setText("SCAN SOAL");
+        scan.setText("GALERI");
+
+        Button live = new Button(this);
+        live.setText("LIVE CAM");
 
         Button copy = new Button(this);
         copy.setText("SALIN");
@@ -113,17 +146,21 @@ public class MainActivity extends Activity {
         Button close = new Button(this);
         close.setText("TUTUP");
 
-        buttons.addView(scan, new LinearLayout.LayoutParams(
-            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1
-        ));
+        Button[] buttonList = {scan, live, copy, close};
 
-        buttons.addView(copy, new LinearLayout.LayoutParams(
-            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1
-        ));
+        for (Button button : buttonList) {
+            buttons.addView(button, new LinearLayout.LayoutParams(
+                0,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                1
+            ));
+        }
 
-        buttons.addView(close, new LinearLayout.LayoutParams(
-            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1
-        ));
+        previewView = new PreviewView(this);
+        previewView.setImplementationMode(
+            PreviewView.ImplementationMode.COMPATIBLE
+        );
+        previewView.setVisibility(View.GONE);
 
         resultText = new TextView(this);
         resultText.setText("Hasil pemindaian akan muncul di sini.");
@@ -144,6 +181,13 @@ public class MainActivity extends Activity {
         panel.addView(address);
         panel.addView(buttons);
 
+        panel.addView(previewView,
+            new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                220
+            )
+        );
+
         panel.addView(resultScroll,
             new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -153,7 +197,8 @@ public class MainActivity extends Activity {
 
         panel.addView(web, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
-            0, 1
+            0,
+            1
         ));
 
         int width = (int) (getResources()
@@ -191,6 +236,16 @@ public class MainActivity extends Activity {
 
         scan.setOnClickListener(v -> selectImage());
 
+        live.setOnClickListener(v -> {
+            if (previewView.getVisibility() == View.VISIBLE) {
+                stopLiveCamera();
+                previewView.setVisibility(View.GONE);
+                live.setText("LIVE CAM");
+            } else {
+                startLiveCamera();
+            }
+        });
+
         copy.setOnClickListener(v -> {
             ClipboardManager clipboard =
                 (ClipboardManager) getSystemService(
@@ -206,18 +261,172 @@ public class MainActivity extends Activity {
         });
 
         close.setOnClickListener(v -> {
-            web.destroy();
+            stopLiveCamera();
+
+            if (web != null) {
+                web.destroy();
+            }
+
             wm.removeView(panel);
+
             panel = null;
             web = null;
+            previewView = null;
             resultText = null;
         });
+    }
+
+    private void startLiveCamera() {
+        if (previewView == null) return;
+
+        if (ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.CAMERA
+            ) != PackageManager.PERMISSION_GRANTED) {
+
+            ActivityCompat.requestPermissions(
+                this,
+                new String[]{Manifest.permission.CAMERA},
+                CAMERA_PERMISSION
+            );
+            return;
+        }
+
+        previewView.setVisibility(View.VISIBLE);
+        resultText.setText("Menyiapkan kamera...");
+
+        ListenableFuture<ProcessCameraProvider> future =
+            ProcessCameraProvider.getInstance(this);
+
+        future.addListener(() -> {
+            try {
+                cameraProvider = future.get();
+
+                Preview preview = new Preview.Builder().build();
+                preview.setSurfaceProvider(
+                    previewView.getSurfaceProvider()
+                );
+
+                ImageAnalysis analysis =
+                    new ImageAnalysis.Builder()
+                        .setBackpressureStrategy(
+                            ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST
+                        )
+                        .build();
+
+                analysis.setAnalyzer(cameraExecutor, imageProxy -> {
+                    scanCameraFrame(imageProxy);
+                });
+
+                cameraProvider.unbindAll();
+
+                cameraProvider.bindToLifecycle(
+                    this,
+                    CameraSelector.DEFAULT_BACK_CAMERA,
+                    preview,
+                    analysis
+                );
+
+                runOnUiThread(() -> {
+                    if (resultText != null) {
+                        resultText.setText(
+                            "Kamera aktif. Arahkan ke tulisan."
+                        );
+                    }
+                });
+
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    if (resultText != null) {
+                        resultText.setText(
+                            "Kamera gagal: " + e.getMessage()
+                        );
+                    }
+                });
+            }
+        }, ContextCompat.getMainExecutor(this));
+    }
+
+    private void scanCameraFrame(ImageProxy imageProxy) {
+        if (processing.getAndSet(true)) {
+            imageProxy.close();
+            return;
+        }
+
+        android.media.Image mediaImage = imageProxy.getImage();
+
+        if (mediaImage == null) {
+            processing.set(false);
+            imageProxy.close();
+            return;
+        }
+
+        InputImage image = InputImage.fromMediaImage(
+            mediaImage,
+            imageProxy.getImageInfo().getRotationDegrees()
+        );
+
+        recognizer.process(image)
+            .addOnSuccessListener(result -> {
+                String text = result.getText();
+
+                if (resultText != null && !text.isEmpty()) {
+                    runOnUiThread(() -> {
+                        if (resultText != null) {
+                            resultText.setText(text);
+                        }
+                    });
+                }
+            })
+            .addOnFailureListener(e -> {
+                runOnUiThread(() -> {
+                    if (resultText != null) {
+                        resultText.setText(
+                            "Gagal membaca: " + e.getMessage()
+                        );
+                    }
+                });
+            })
+            .addOnCompleteListener(task -> {
+                processing.set(false);
+                imageProxy.close();
+            });
+    }
+
+    private void stopLiveCamera() {
+        if (cameraProvider != null) {
+            cameraProvider.unbindAll();
+            cameraProvider = null;
+        }
     }
 
     private void selectImage() {
         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
         intent.setType("image/*");
         startActivityForResult(intent, PICK_IMAGE);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(
+        int requestCode,
+        String[] permissions,
+        int[] grantResults
+    ) {
+        super.onRequestPermissionsResult(
+            requestCode,
+            permissions,
+            grantResults
+        );
+
+        if (requestCode == CAMERA_PERMISSION
+                && grantResults.length > 0
+                && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            startLiveCamera();
+        } else if (requestCode == CAMERA_PERMISSION) {
+            if (resultText != null) {
+                resultText.setText("Izin kamera belum diberikan.");
+            }
+        }
     }
 
     @Override
@@ -243,11 +452,6 @@ public class MainActivity extends Activity {
                 InputImage image =
                     InputImage.fromFilePath(this, imageUri);
 
-                TextRecognizer recognizer =
-                    TextRecognition.getClient(
-                        TextRecognizerOptions.DEFAULT_OPTIONS
-                    );
-
                 recognizer.process(image)
                     .addOnSuccessListener(result -> {
                         if (resultText != null) {
@@ -261,7 +465,6 @@ public class MainActivity extends Activity {
                                 resultText.setText(text);
                             }
                         }
-                        recognizer.close();
                     })
                     .addOnFailureListener(e -> {
                         if (resultText != null) {
@@ -270,7 +473,6 @@ public class MainActivity extends Activity {
                                 e.getMessage()
                             );
                         }
-                        recognizer.close();
                     });
 
             } catch (Exception e) {
@@ -282,4 +484,20 @@ public class MainActivity extends Activity {
             }
         }
     }
-}
+
+    @Override
+    protected void onDestroy() {
+        stopLiveCamera();
+
+        if (recognizer != null) {
+            recognizer.close();
+        }
+
+        if (cameraExecutor != null) {
+            cameraExecutor.shutdown();
+        }
+
+        super.onDestroy();
+    }
+            }
+            
