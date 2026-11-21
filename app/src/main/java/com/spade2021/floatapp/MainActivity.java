@@ -10,6 +10,7 @@ import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
+import android.view.View;
 import android.view.WindowManager;
 import android.content.Context;
 import android.view.inputmethod.InputMethodManager;
@@ -21,11 +22,9 @@ import android.webkit.*;
 public class MainActivity extends Activity {
 
     private WindowManager wm;
-    private View floatingButton;
-    private View panelView;
+    private View floatingButton, panelView;
     private EditText searchInput;
     private WebView webView;
-
     private boolean buttonAdded = false;
     private boolean panelVisible = false;
 
@@ -78,7 +77,6 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-
         if (Settings.canDrawOverlays(this) && !buttonAdded) {
             showFloatingButton();
         }
@@ -88,16 +86,12 @@ public class MainActivity extends Activity {
         if (buttonAdded) return;
 
         TextView button = new TextView(this);
-
-        // Lingkaran putih polos tanpa tulisan
         button.setBackground(rounded(WHITE, 50));
-
         floatingButton = button;
 
         WindowManager.LayoutParams params =
             new WindowManager.LayoutParams(
-                dp(42),
-                dp(42),
+                dp(42), dp(42),
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                 PixelFormat.TRANSLUCENT
@@ -119,13 +113,10 @@ public class MainActivity extends Activity {
     }
 
     private void togglePanel() {
-        if (panelVisible) {
-            hidePanel();
-        } else {
-            showPanel();
-        }
+        if (panelVisible) hidePanel();
+        else showPanel();
     }
-    
+
     private void showPanel() {
         if (panelVisible) return;
 
@@ -149,14 +140,8 @@ public class MainActivity extends Activity {
         close.setTextColor(WHITE);
         close.setGravity(Gravity.CENTER);
 
-        header.addView(title, new LinearLayout.LayoutParams(
-            0, dp(42), 1
-        ));
-
-        header.addView(close, new LinearLayout.LayoutParams(
-            dp(42), dp(42)
-        ));
-
+        header.addView(title, new LinearLayout.LayoutParams(0, dp(42), 1));
+        header.addView(close, new LinearLayout.LayoutParams(dp(42), dp(42)));
         close.setOnClickListener(v -> hidePanel());
         root.addView(header);
 
@@ -171,9 +156,7 @@ public class MainActivity extends Activity {
         searchInput.setImeOptions(EditorInfo.IME_ACTION_GO);
 
         LinearLayout.LayoutParams inputParams =
-            new LinearLayout.LayoutParams(
-                -1, dp(48)
-            );
+            new LinearLayout.LayoutParams(-1, dp(48));
         inputParams.topMargin = dp(12);
         root.addView(searchInput, inputParams);
 
@@ -197,9 +180,7 @@ public class MainActivity extends Activity {
         webView.setWebChromeClient(new WebChromeClient());
 
         LinearLayout.LayoutParams webParams =
-            new LinearLayout.LayoutParams(
-                -1, 0, 1
-            );
+            new LinearLayout.LayoutParams(-1, 0, 1);
         webParams.topMargin = dp(12);
         root.addView(webView, webParams);
 
@@ -219,8 +200,7 @@ public class MainActivity extends Activity {
 
         WindowManager.LayoutParams params =
             new WindowManager.LayoutParams(
-                dp(340),
-                dp(520),
+                dp(340), dp(520),
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
                 PixelFormat.TRANSLUCENT
@@ -242,20 +222,16 @@ public class MainActivity extends Activity {
         if (searchInput == null || webView == null) return;
 
         String query = searchInput.getText().toString().trim();
-
         if (query.isEmpty()) return;
 
         String url;
 
-        if (query.startsWith("https://") ||
-            query.startsWith("http://")) {
+        if (query.startsWith("https://") || query.startsWith("http://")) {
             url = query;
-        } else if (query.contains(".") &&
-                   !query.contains(" ")) {
+        } else if (query.contains(".") && !query.contains(" ")) {
             url = "https://" + query;
         } else {
-            url = "https://www.google.com/search?q=" +
-                Uri.encode(query);
+            url = "https://www.google.com/search?q=" + Uri.encode(query);
         }
 
         webView.loadUrl(url);
@@ -266,9 +242,7 @@ public class MainActivity extends Activity {
             );
 
         if (imm != null) {
-            imm.hideSoftInputFromWindow(
-                searchInput.getWindowToken(), 0
-            );
+            imm.hideSoftInputFromWindow(searchInput.getWindowToken(), 0);
         }
     }
 
@@ -276,8 +250,7 @@ public class MainActivity extends Activity {
         if (panelView != null) {
             try {
                 wm.removeView(panelView);
-            } catch (Exception ignored) {
-            }
+            } catch (Exception ignored) {}
         }
 
         if (webView != null) {
@@ -297,11 +270,11 @@ public class MainActivity extends Activity {
         if (floatingButton != null && buttonAdded) {
             try {
                 wm.removeView(floatingButton);
-            } catch (Exception ignored) {
-            }
+            } catch (Exception ignored) {}
         }
 
         buttonAdded = false;
         super.onDestroy();
     }
-}
+            }
+    
