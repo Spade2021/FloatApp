@@ -2,574 +2,326 @@
 package com.spade2021.floatapp;
 
 import android.app.Activity;
-import android.content.Context;
+import android.os.Bundle;
 import android.content.Intent;
-import android.graphics.Bitmap;
+import android.net.Uri;
+import android.provider.Settings;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
+import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
-import android.media.projection.MediaProjectionManager;
-import android.net.Uri;
-import android.os.Build;
-import android.os.Bundle;
-import android.provider.Settings;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
+import android.view.inputmethod.InputMethodManager;
+import android.content.Context;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.webkit.WebChromeClient;
+import android.view.inputmethod.EditorInfo;
+import android.view.KeyEvent;
+import android.widget.FrameLayout;
 import android.widget.Toast;
 
 public class MainActivity extends Activity {
 
-    private static final int REQUEST_OVERLAY = 100;
-    private static final int REQUEST_SCREEN = 200;
-
     private WindowManager windowManager;
     private View floatingButton;
-    private View floatingPanel;
+    private View panelView;
+    private WindowManager.LayoutParams buttonParams;
+    private WindowManager.LayoutParams panelParams;
 
+    private EditText searchInput;
     private WebView webView;
-    private ImageView screenPreview;
-    private TextView screenStatus;
 
-    private MediaProjectionManager projectionManager;
+    private boolean panelVisible = false;
+    private boolean buttonAdded = false;
 
-    private Bitmap previousFrame;
-
-    private int dp(float value) {
-        return (int) (value * getResources()
-                .getDisplayMetrics().density + 0.5f);
-    }
+    private final int BG = Color.rgb(22, 24, 30);
+    private final int PANEL = Color.rgb(31, 34, 42);
+    private final int BLUE = Color.rgb(65, 125, 255);
+    private final int WHITE = Color.WHITE;
+    private final int MUTED = Color.rgb(165, 170, 185);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        windowManager = (WindowManager)
-                getSystemService(WINDOW_SERVICE);
+        windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
 
-        projectionManager = (MediaProjectionManager)
-                getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+        TextView message = new TextView(this);
+        message.setText("FloatApp\n\nAktifkan izin tampil di atas aplikasi lain agar tombol mengambang bisa digunakan.");
+        message.setTextColor(Color.WHITE);
+        message.setTextSize(16);
+        message.setGravity(Gravity.CENTER);
+        message.setPadding(24, 24, 24, 24);
+        message.setBackgroundColor(BG);
+        setContentView(message);
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
-                && !Settings.canDrawOverlays(this)) {
-
+        if (!Settings.canDrawOverlays(this)) {
             Intent intent = new Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:" + getPackageName())
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:" + getPackageName())
             );
+            startActivity(intent);
+        }
+    }
 
-            startActivityForResult(intent, REQUEST_OVERLAY);
+    @Override
+    protected void onResume() {
+        super.onResume();
 
-        } else {
+        if (Settings.canDrawOverlays(this) && !buttonAdded) {
             showFloatingButton();
         }
     }
 
-    private int getWindowType() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            return WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
-        }
-
-        return WindowManager.LayoutParams.TYPE_PHONE;
+    private int dp(float value) {
+        return (int) (value * getResources().getDisplayMetrics().density);
     }
 
-    private GradientDrawable rounded(
-            int color,
-            int radius
-    ) {
+    private GradientDrawable rounded(int color, int radius) {
         GradientDrawable drawable = new GradientDrawable();
         drawable.setColor(color);
         drawable.setCornerRadius(dp(radius));
         return drawable;
     }
 
-    private TextView makeText(
-            String value,
-            int size,
-            int color
-    ) {
+    private TextView makeText(String value, int size, int color) {
         TextView text = new TextView(this);
         text.setText(value);
         text.setTextSize(size);
         text.setTextColor(color);
+        text.setGravity(Gravity.CENTER_VERTICAL);
         return text;
     }
 
-    private Button makeButton(String value) {
-        Button button = new Button(this);
-        button.setText(value);
-        button.setTextSize(12);
-        button.setAllCaps(false);
-        return button;
-    }
-
     private void showFloatingButton() {
-        if (floatingButton != null) return;
+        if (buttonAdded) return;
 
-        View dot = new View(this);
-        dot.setBackground(rounded(Color.WHITE, 50));
-        dot.setElevation(dp(5));
+        TextView button = new TextView(this);
+        button.setText("F");
+        button.setTextSize(18);
+        button.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        button.setTextColor(Color.rgb(25, 30, 45));
+        button.setGravity(Gravity.CENTER);
+        button.setBackground(rounded(WHITE, 50));
+        floatingButton = button;
 
-        floatingButton = dot;
+        buttonParams = new WindowManager.LayoutParams(
+            dp(42),
+            dp(42),
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT
+        );
 
-        WindowManager.LayoutParams params =
-                new WindowManager.LayoutParams(
-                        dp(20),
-                        dp(20),
-                        getWindowType(),
-                        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                                | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                        PixelFormat.TRANSLUCENT
-                );
+        buttonParams.gravity = Gravity.BOTTOM | Gravity.LEFT;
+        buttonParams.x = dp(12);
+        buttonParams.y = dp(110);
 
-        params.gravity = Gravity.BOTTOM | Gravity.LEFT;
-        params.x = dp(12);
-        params.y = dp(18);
-
-        dot.setOnClickListener(v -> {
-            if (floatingPanel == null) {
-                showFloatingPanel();
-            } else {
-                closeFloatingPanel();
-            }
-        });
+        button.setOnClickListener(v -> togglePanel());
 
         try {
-            windowManager.addView(dot, params);
+            windowManager.addView(floatingButton, buttonParams);
+            buttonAdded = true;
         } catch (Exception e) {
-            Toast.makeText(this,
-                    "Tombol mengambang gagal dibuat",
-                    Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Tidak bisa menampilkan tombol mengambang", Toast.LENGTH_SHORT).show();
+        }
+    }
+    
+    private void togglePanel() {
+        if (panelVisible) {
+            hidePanel();
+        } else {
+            showPanel();
         }
     }
 
-    private void showFloatingPanel() {
-        if (floatingPanel != null) return;
+    private void showPanel() {
+        if (panelVisible) return;
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(14), dp(14), dp(14), dp(14));
-        root.setBackground(rounded(
-                Color.rgb(24, 26, 32), 20
-        ));
-        root.setElevation(dp(12));
+        root.setPadding(dp(16), dp(14), dp(16), dp(16));
+        root.setBackground(rounded(BG, 20));
 
-        // Header
         LinearLayout header = new LinearLayout(this);
         header.setGravity(Gravity.CENTER_VERTICAL);
-        header.setOrientation(LinearLayout.HORIZONTAL);
 
-        TextView title = makeText(
-                "FLOAT APP",
-                19,
-                Color.WHITE
-        );
-        title.setTypeface(null, android.graphics.Typeface.BOLD);
+        TextView title = makeText("FloatApp", 19, WHITE);
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
 
-        header.addView(title,
-                new LinearLayout.LayoutParams(0, dp(42), 1));
+        TextView close = makeText("✕", 20, WHITE);
+        close.setGravity(Gravity.CENTER);
+        close.setOnClickListener(v -> hidePanel());
 
-        Button close = makeButton("✕");
-        header.addView(close,
-                new LinearLayout.LayoutParams(dp(48), dp(42)));
-
+        header.addView(title, new LinearLayout.LayoutParams(0, dp(42), 1));
+        header.addView(close, new LinearLayout.LayoutParams(dp(42), dp(42)));
         root.addView(header);
 
-        // Browser address
-        EditText address = new EditText(this);
-        address.setSingleLine(true);
-        address.setTextColor(Color.WHITE);
-        address.setHintTextColor(Color.GRAY);
-        address.setHint("Cari di Google atau masukkan URL");
-        address.setTextSize(13);
-        address.setPadding(dp(12), 0, dp(12), 0);
-        address.setBackground(rounded(
-                Color.rgb(43, 46, 55), 12
-        ));
+        searchInput = new EditText(this);
+        searchInput.setSingleLine(true);
+        searchInput.setTextColor(WHITE);
+        searchInput.setHintTextColor(MUTED);
+        searchInput.setHint("Cari di Google atau masukkan alamat");
+        searchInput.setTextSize(14);
+        searchInput.setPadding(dp(12), 0, dp(12), 0);
+        searchInput.setBackground(rounded(PANEL, 12));
+        searchInput.setImeOptions(EditorInfo.IME_ACTION_GO);
 
-        LinearLayout.LayoutParams addressParams =
-                new LinearLayout.LayoutParams(
-                        -1, dp(46)
-                );
-        addressParams.topMargin = dp(10);
-        root.addView(address, addressParams);
+        LinearLayout.LayoutParams inputParams =
+            new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(48)
+            );
+        inputParams.topMargin = dp(12);
+        root.addView(searchInput, inputParams);
 
-        // Search button
-        Button search = makeButton("Cari / Buka");
-        search.setBackground(rounded(
-                Color.rgb(65, 105, 225), 12
-        ));
-        search.setTextColor(Color.WHITE);
+        Button searchButton = new Button(this);
+        searchButton.setText("Cari / Buka");
+        searchButton.setTextColor(WHITE);
+        searchButton.setBackgroundTintList(
+            android.content.res.ColorStateList.valueOf(BLUE)
+        );
 
         LinearLayout.LayoutParams searchParams =
-                new LinearLayout.LayoutParams(
-                        -1, dp(44)
-                );
-        searchParams.topMargin = dp(7);
-        root.addView(search, searchParams);
+            new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(46)
+            );
+        searchParams.topMargin = dp(8);
+        root.addView(searchButton, searchParams);
 
-        // Web browser
+        FrameLayout browserContainer = new FrameLayout(this);
+        browserContainer.setBackground(rounded(PANEL, 12));
+
         webView = new WebView(this);
-
-        WebSettings settings = webView.getSettings();
-        settings.setJavaScriptEnabled(true);
-        settings.setDomStorageEnabled(true);
-
-        webView.setWebViewClient(new WebViewClient());
         webView.setBackgroundColor(Color.WHITE);
-        webView.loadUrl("https://www.google.com");
+        webView.getSettings().setJavaScriptEnabled(true);
+        webView.getSettings().setDomStorageEnabled(true);
+        webView.setWebViewClient(new WebViewClient());
+        webView.setWebChromeClient(new WebChromeClient());
 
-        LinearLayout.LayoutParams webParams =
-                new LinearLayout.LayoutParams(
-                        -1, 0, 1
-                );
-        webParams.topMargin = dp(10);
-        webParams.bottomMargin = dp(10);
-
-        root.addView(webView, webParams);
-
-        // Live Screen title
-        TextView liveTitle = makeText(
-                "LIVE SCREEN",
-                14,
-                Color.WHITE
-        );
-        liveTitle.setTypeface(null, android.graphics.Typeface.BOLD);
-        root.addView(liveTitle);
-
-        screenStatus = makeText(
-                "Belum dimulai",
-                11,
-                Color.LTGRAY
+        browserContainer.addView(
+            webView,
+            new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
         );
 
-        LinearLayout.LayoutParams statusParams =
-                new LinearLayout.LayoutParams(
-                        -1, dp(28)
-                );
-        statusParams.topMargin = dp(3);
-        root.addView(screenStatus, statusParams);
+        LinearLayout.LayoutParams browserParams =
+            new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1
+            );
+        browserParams.topMargin = dp(12);
+        root.addView(browserContainer, browserParams);
 
-        // Screen preview
-        screenPreview = new ImageView(this);
-        screenPreview.setBackground(rounded(
-                Color.BLACK, 12
-        ));
-        screenPreview.setScaleType(
-                ImageView.ScaleType.FIT_CENTER
-        );
+        searchButton.setOnClickListener(v -> performSearch());
 
-        root.addView(screenPreview,
-                new LinearLayout.LayoutParams(
-                        -1, dp(115)
-                ));
-
-        // Live buttons
-        LinearLayout liveButtons = new LinearLayout(this);
-        liveButtons.setOrientation(LinearLayout.HORIZONTAL);
-
-        Button startLive = makeButton("Mulai Live");
-        Button stopLive = makeButton("Stop");
-
-        startLive.setTextColor(Color.WHITE);
-        startLive.setBackground(rounded(
-                Color.rgb(35, 145, 95), 12
-        ));
-
-        stopLive.setTextColor(Color.WHITE);
-        stopLive.setBackground(rounded(
-                Color.rgb(170, 55, 65), 12
-        ));
-
-        LinearLayout.LayoutParams liveButtonParams =
-                new LinearLayout.LayoutParams(
-                        0, dp(44), 1
-                );
-        liveButtonParams.setMargins(
-                dp(3), dp(9), dp(3), 0
-        );
-
-        liveButtons.addView(startLive, liveButtonParams);
-        liveButtons.addView(stopLive, liveButtonParams);
-
-        root.addView(liveButtons);
-
-        // Browser action
-        search.setOnClickListener(v -> {
-            String input = address.getText()
-                    .toString().trim();
-
-            if (input.isEmpty()) return;
-
-            String url;
-
-            if (input.startsWith("https://")
-                    || input.startsWith("http://")) {
-                url = input;
-            } else if (input.contains(".")
-                    && !input.contains(" ")) {
-                url = "https://" + input;
-            } else {
-                url = "https://www.google.com/search?q="
-                        + Uri.encode(input);
+        searchInput.setOnEditorActionListener((v, actionId, event) -> {
+            if (actionId == EditorInfo.IME_ACTION_GO ||
+                (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER)) {
+                performSearch();
+                return true;
             }
-
-            webView.loadUrl(url);
+            return false;
         });
 
-        address.setOnEditorActionListener((v, actionId, event) -> {
-            search.performClick();
-            return true;
-        });
+        panelView = root;
 
-        close.setOnClickListener(v -> closeFloatingPanel());
-
-        startLive.setOnClickListener(v -> requestLiveScreen());
-        stopLive.setOnClickListener(v -> stopLiveScreen());
-
-        floatingPanel = root;
-
-        int panelWidth = Math.min(
-                dp(380),
-                getResources().getDisplayMetrics().widthPixels - dp(32)
+        panelParams = new WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            dp(520),
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+            PixelFormat.TRANSLUCENT
         );
-
-        int panelHeight = Math.min(
-                dp(620),
-                getResources().getDisplayMetrics().heightPixels - dp(80)
-        );
-
-        WindowManager.LayoutParams panelParams =
-                new WindowManager.LayoutParams(
-                        panelWidth,
-                        panelHeight,
-                        getWindowType(),
-                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
-                                | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
-                        PixelFormat.TRANSLUCENT
-                );
 
         panelParams.gravity = Gravity.CENTER;
+        panelParams.width = dp(340);
 
         try {
-            windowManager.addView(floatingPanel, panelParams);
+            windowManager.addView(panelView, panelParams);
+            panelVisible = true;
         } catch (Exception e) {
-            floatingPanel = null;
-            Toast.makeText(this,
-                    "Panel gagal dibuka",
-                    Toast.LENGTH_SHORT).show();
-        }
-            }
-                              
-    private void requestLiveScreen() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
-                && !Settings.canDrawOverlays(this)) {
-            Toast.makeText(this,
-                    "Izin overlay diperlukan",
-                    Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        try {
-            Intent permissionIntent =
-                    projectionManager.createScreenCaptureIntent();
-
-            startActivityForResult(
-                    permissionIntent,
-                    REQUEST_SCREEN
-            );
-
-        } catch (Exception e) {
-            if (screenStatus != null) {
-                screenStatus.setText("Gagal meminta izin layar");
-            }
+            panelView = null;
+            Toast.makeText(this, "Panel gagal dibuka", Toast.LENGTH_SHORT).show();
         }
     }
 
-    @Override
-    protected void onActivityResult(
-            int requestCode,
-            int resultCode,
-            Intent data
-    ) {
-        super.onActivityResult(requestCode, resultCode, data);
+    private void performSearch() {
+        if (searchInput == null || webView == null) return;
 
-        if (requestCode == REQUEST_OVERLAY) {
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M
-                    || Settings.canDrawOverlays(this)) {
-                showFloatingButton();
-            } else {
-                Toast.makeText(this,
-                        "Izin overlay belum diberikan",
-                        Toast.LENGTH_SHORT).show();
+        String query = searchInput.getText().toString().trim();
+
+        if (query.isEmpty()) return;
+
+        String url;
+
+        if (query.startsWith("https://") || query.startsWith("http://")) {
+            url = query;
+        } else if (query.contains(".") && !query.contains(" ")) {
+            url = "https://" + query;
+        } else {
+            try {
+                url = "https://www.google.com/search?q=" +
+                    Uri.encode(query);
+            } catch (Exception e) {
+                url = "https://www.google.com";
             }
         }
 
-        if (requestCode == REQUEST_SCREEN) {
-            if (resultCode == RESULT_OK && data != null) {
-                startScreenService(resultCode, data);
-            } else if (screenStatus != null) {
-                screenStatus.setText("Izin Live Screen ditolak");
-            }
-        }
-    }
-
-    private void startScreenService(
-            int resultCode,
-            Intent resultData
-    ) {
-        try {
-            ScreenCaptureService.listener =
-                    new ScreenCaptureService.FrameListener() {
-
-                @Override
-                public void onFrame(Bitmap bitmap) {
-                    runOnUiThread(() -> {
-                        if (screenPreview == null
-                                || floatingPanel == null) {
-                            bitmap.recycle();
-                            return;
-                        }
-
-                        if (previousFrame != null
-                                && previousFrame != bitmap) {
-                            previousFrame.recycle();
-                        }
-
-                        previousFrame = bitmap;
-                        screenPreview.setImageBitmap(bitmap);
-
-                        if (screenStatus != null) {
-                            screenStatus.setText(
-                                    "Live Screen aktif"
-                            );
-                        }
-                    });
-                }
-
-                @Override
-                public void onStopped(String message) {
-                    runOnUiThread(() -> {
-                        if (screenStatus != null) {
-                            screenStatus.setText(message);
-                        }
-                    });
-                }
-            };
-
-            Intent serviceIntent =
-                    new Intent(this, ScreenCaptureService.class);
-
-            serviceIntent.putExtra(
-                    ScreenCaptureService.EXTRA_RESULT_CODE,
-                    resultCode
-            );
-
-            serviceIntent.putExtra(
-                    ScreenCaptureService.EXTRA_RESULT_DATA,
-                    resultData
-            );
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(serviceIntent);
-            } else {
-                startService(serviceIntent);
-            }
-
-            if (screenStatus != null) {
-                screenStatus.setText(
-                        "Menghubungkan Live Screen..."
-                );
-            }
-
-        } catch (Exception e) {
-            ScreenCaptureService.listener = null;
-
-            if (screenStatus != null) {
-                screenStatus.setText(
-                        "Gagal memulai Live Screen"
-                );
-            }
-        }
-    }
-
-    private void stopLiveScreen() {
-        ScreenCaptureService.listener = null;
+        webView.loadUrl(url);
 
         try {
-            stopService(new Intent(
-                    this,
-                    ScreenCaptureService.class
-            ));
+            InputMethodManager imm =
+                (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+            imm.hideSoftInputFromWindow(searchInput.getWindowToken(), 0);
         } catch (Exception ignored) {
         }
-
-        if (screenPreview != null) {
-            screenPreview.setImageDrawable(null);
-        }
-
-        if (previousFrame != null) {
-            previousFrame.recycle();
-            previousFrame = null;
-        }
-
-        if (screenStatus != null) {
-            screenStatus.setText("Live Screen dihentikan");
-        }
     }
 
-    private void closeFloatingPanel() {
-        stopLiveScreen();
+    private void hidePanel() {
+        if (panelView != null) {
+            try {
+                windowManager.removeView(panelView);
+            } catch (Exception ignored) {
+            }
+        }
 
         if (webView != null) {
-            webView.stopLoading();
             webView.destroy();
             webView = null;
         }
 
-        if (floatingPanel != null) {
-            try {
-                windowManager.removeView(floatingPanel);
-            } catch (Exception ignored) {
-            }
-
-            floatingPanel = null;
-        }
-
-        screenPreview = null;
-        screenStatus = null;
+        panelView = null;
+        searchInput = null;
+        panelVisible = false;
     }
 
     @Override
     protected void onDestroy() {
-        closeFloatingPanel();
+        super.onDestroy();
 
-        if (floatingButton != null) {
+        hidePanel();
+
+        if (floatingButton != null && buttonAdded) {
             try {
                 windowManager.removeView(floatingButton);
             } catch (Exception ignored) {
             }
-
-            floatingButton = null;
         }
 
-        super.onDestroy();
+        buttonAdded = false;
     }
-
-    @Override
-    public void onBackPressed() {
-        if (floatingPanel != null) {
-            closeFloatingPanel();
-        } else {
-            super.onBackPressed();
-        }
     }
-}
+                
