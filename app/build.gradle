@@ -22,14 +22,17 @@ android {
 }
 
 dependencies {
+    // AndroidX
     implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'androidx.core:core:1.15.0'
+    implementation 'androidx.activity:activity:1.10.1'
 
-    // OCR untuk membaca tulisan
+    // OCR ML Kit
     implementation 'com.google.mlkit:text-recognition:16.0.1'
 
-    // Kamera langsung
+    // CameraX
     def camerax_version = "1.4.2"
+
     implementation "androidx.camera:camera-core:$camerax_version"
     implementation "androidx.camera:camera-camera2:$camerax_version"
     implementation "androidx.camera:camera-lifecycle:$camerax_version"
