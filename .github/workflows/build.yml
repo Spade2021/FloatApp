@@ -9,10 +9,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Java
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -23,22 +23,38 @@ jobs:
         with:
           packages: ''
 
-      - name: Install Android SDK packages
+      - name: Install Android SDK Packages
         run: |
           yes | sdkmanager --licenses
           sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Validate Android Manifest
+        run: |
+          echo "Checking AndroidManifest.xml..."
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          path = "app/src/main/AndroidManifest.xml"
+          try:
+              ET.parse(path)
+              print("Manifest XML is valid!")
+          except Exception as e:
+              print("Manifest XML ERROR:", e)
+              raise
+          PY
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.7"
 
-      - name: Build APK
-        run: gradle :app:assembleDebug
+      - name: Build Debug APK
+        run: gradle :app:assembleDebug --stacktrace --info
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: FloatApp
           path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
           
