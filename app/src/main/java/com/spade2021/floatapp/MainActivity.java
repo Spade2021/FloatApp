@@ -2,20 +2,24 @@
 package com.spade2021.floatapp;
 
 import android.Manifest;
+import android.app.Activity;
 import android.os.Bundle;
 import android.content.Intent;
 import android.provider.Settings;
 import android.net.Uri;
+import android.graphics.Color;
 import android.graphics.PixelFormat;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
 import android.view.WindowManager;
+import android.view.View;
+import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.pm.PackageManager;
-import android.view.View;
-import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -24,6 +28,7 @@ import android.widget.ScrollView;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.webkit.WebSettings;
+import android.widget.FrameLayout;
 
 import androidx.activity.ComponentActivity;
 import androidx.camera.core.CameraSelector;
@@ -48,6 +53,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class MainActivity extends ComponentActivity {
 
     private WindowManager wm;
+    private View floatButton;
     private LinearLayout panel;
     private WebView web;
     private TextView resultText;
@@ -58,11 +64,71 @@ public class MainActivity extends ComponentActivity {
     private ExecutorService cameraExecutor;
     private TextRecognizer recognizer;
 
+    private boolean cameraRequested = false;
+    private boolean cameraStarting = false;
+    private boolean cameraBound = false;
+
     private final AtomicBoolean processing =
         new AtomicBoolean(false);
 
     private static final int PICK_IMAGE = 100;
     private static final int CAMERA_PERMISSION = 101;
+
+    private final int BG = 0xFF111522;
+    private final int PANEL = 0xFF20283A;
+    private final int ACCENT = 0xFF7585FF;
+    private final int WHITE = 0xFFF4F5FF;
+    private final int MUTED = 0xFF9CA8C5;
+
+    private int dp(float value) {
+        return (int) (value *
+            getResources().getDisplayMetrics().density);
+    }
+
+    private GradientDrawable shape(
+        int color,
+        int radius
+    ) {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(color);
+        drawable.setCornerRadius(dp(radius));
+        return drawable;
+    }
+
+    private TextView text(
+        String value,
+        int size,
+        int color
+    ) {
+        TextView view = new TextView(this);
+        view.setText(value);
+        view.setTextSize(size);
+        view.setTextColor(color);
+        return view;
+    }
+
+    private Button makeButton(String value) {
+        Button button = new Button(this);
+        button.setText(value);
+        button.setTextSize(11);
+        button.setAllCaps(false);
+        button.setTextColor(WHITE);
+        button.setBackground(shape(0xFF303B58, 14));
+        return button;
+    }
+
+    private LinearLayout vertical() {
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        return layout;
+    }
+
+    private LinearLayout horizontal() {
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.HORIZONTAL);
+        layout.setGravity(Gravity.CENTER_VERTICAL);
+        return layout;
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -90,30 +156,48 @@ public class MainActivity extends ComponentActivity {
     protected void onResume() {
         super.onResume();
 
-        if (Settings.canDrawOverlays(this) && wm == null) {
-            showFloatingButton();
+        if (Settings.canDrawOverlays(this)) {
+            if (wm == null) {
+                showFloatingButton();
+            }
+
+            if (cameraRequested && previewView != null) {
+                previewView.post(this::startLiveCamera);
+            }
         }
     }
 
     private void showFloatingButton() {
+
         wm = (WindowManager)
             getSystemService(WINDOW_SERVICE);
 
-        Button floatButton = new Button(this);
-        floatButton.setText("FLOAT");
+        TextView dot = new TextView(this);
+        dot.setText("●");
+        dot.setTextSize(15);
+        dot.setTextColor(Color.BLACK);
+        dot.setGravity(Gravity.CENTER);
+
+        GradientDrawable circle = new GradientDrawable();
+        circle.setShape(GradientDrawable.OVAL);
+        circle.setColor(0x66FFFFFF);
+        circle.setStroke(dp(1), 0x99FFFFFF);
+
+        dot.setBackground(circle);
+        floatButton = dot;
 
         WindowManager.LayoutParams params =
             new WindowManager.LayoutParams(
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.WRAP_CONTENT,
+                dp(42),
+                dp(42),
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                 PixelFormat.TRANSLUCENT
             );
 
-        params.gravity = Gravity.TOP | Gravity.START;
-        params.x = 30;
-        params.y = 200;
+        params.gravity = Gravity.TOP | Gravity.RIGHT;
+        params.x = dp(12);
+        params.y = dp(35);
 
         wm.addView(floatButton, params);
 
@@ -126,122 +210,163 @@ public class MainActivity extends ComponentActivity {
 
         if (panel != null) return;
 
-        panel = new LinearLayout(this);
-        panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setPadding(8, 8, 8, 8);
-        panel.setBackgroundColor(0xFFFFFFFF);
+        panel = vertical();
+        panel.setPadding(dp(10), dp(10), dp(10), dp(10));
+        panel.setBackground(shape(BG, 22));
+
+        TextView heading = text("FloatApp", 23, WHITE);
+        heading.setTypeface(null, Typeface.BOLD);
+
+        TextView subtitle = text(
+            "SMART FLOATING WORKSPACE",
+            10,
+            MUTED
+        );
+
+        subtitle.setPadding(0, 0, 0, dp(10));
+
+        LinearLayout header = vertical();
+        header.addView(heading);
+        header.addView(subtitle);
 
         EditText address = new EditText(this);
         address.setSingleLine(true);
-        address.setText("https://www.google.com");
-        address.setHint("Masukkan alamat website");
+        address.setTextColor(WHITE);
+        address.setHintTextColor(MUTED);
+        address.setHint("Cari atau masukkan alamat website");
+        address.setTextSize(13);
+        address.setPadding(dp(12), 0, dp(12), 0);
+        address.setBackground(shape(PANEL, 13));
         address.setImeOptions(EditorInfo.IME_ACTION_GO);
 
-        LinearLayout buttons = new LinearLayout(this);
-        buttons.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout buttons = horizontal();
 
-        Button galleryButton = new Button(this);
-        galleryButton.setText("GALERI");
-
-        liveButton = new Button(this);
-        liveButton.setText("LIVE CAM");
-
-        Button copyButton = new Button(this);
-        copyButton.setText("SALIN");
-
-        Button closeButton = new Button(this);
-        closeButton.setText("TUTUP");
+        Button galleryButton = makeButton("Galeri");
+        liveButton = makeButton("Live Cam");
+        Button copyButton = makeButton("Salin");
+        Button closeButton = makeButton("Tutup");
 
         Button[] buttonList = {
-            galleryButton,
-            liveButton,
-            copyButton,
-            closeButton
+            galleryButton, liveButton, copyButton, closeButton
         };
 
         for (Button button : buttonList) {
-            buttons.addView(button,
+            LinearLayout.LayoutParams p =
                 new LinearLayout.LayoutParams(
                     0,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    dp(44),
                     1
-                )
-            );
+                );
+            p.setMargins(dp(2), dp(5), dp(2), dp(5));
+            buttons.addView(button, p);
         }
 
         web = new WebView(this);
+        web.setBackgroundColor(BG);
         web.setWebViewClient(new WebViewClient());
 
         WebSettings settings = web.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
 
-        TextView googleTitle = new TextView(this);
-        googleTitle.setText("GOOGLE BROWSER");
-        googleTitle.setTextColor(0xFF202124);
-        googleTitle.setTextSize(12);
-        googleTitle.setPadding(6, 5, 6, 5);
+        String home =
+            "<html><body style='background:#111522;color:#f4f5ff;" +
+            "font-family:sans-serif;padding:20px'>" +
+            "<h2>Selamat datang di FloatApp</h2>" +
+            "<p style='color:#9ca8c5'>Browser dan alat pemindai teks " +
+            "dalam satu tempat.</p>" +
+            "<p style='color:#9ca8c5'>Masukkan alamat website di atas " +
+            "untuk mulai menjelajah.</p>" +
+            "</body></html>";
+
+        web.loadDataWithBaseURL(
+            null, home, "text/html", "UTF-8", null
+        );
+
+        TextView cameraHeading = text(
+            "LIVE CAMERA",
+            12,
+            WHITE
+        );
+        cameraHeading.setTypeface(null, Typeface.BOLD);
+        cameraHeading.setPadding(dp(5), dp(8), 0, dp(5));
+        cameraHeading.setVisibility(View.GONE);
 
         previewView = new PreviewView(this);
         previewView.setImplementationMode(
             PreviewView.ImplementationMode.COMPATIBLE
         );
+        previewView.setScaleType(
+            PreviewView.ScaleType.FILL_CENTER
+        );
+        previewView.setBackground(shape(0xFF080B12, 16));
         previewView.setVisibility(View.GONE);
 
-        TextView cameraTitle = new TextView(this);
-        cameraTitle.setText("LIVE CAMERA");
-        cameraTitle.setTextColor(0xFF202124);
-        cameraTitle.setTextSize(12);
-        cameraTitle.setPadding(6, 5, 6, 5);
-        cameraTitle.setVisibility(View.GONE);
-
-        resultText = new TextView(this);
-        resultText.setText("Hasil scan akan muncul di sini.");
-        resultText.setTextColor(0xFF000000);
-        resultText.setTextSize(13);
-        resultText.setPadding(8, 6, 8, 6);
+        resultText = text(
+            "Hasil pemindaian akan muncul di sini.",
+            15,
+            WHITE
+        );
+        resultText.setPadding(dp(12), dp(12), dp(12), dp(12));
+        resultText.setTextIsSelectable(true);
 
         ScrollView resultScroll = new ScrollView(this);
+        resultScroll.setBackground(shape(PANEL, 15));
         resultScroll.addView(resultText);
 
+        TextView resultHeading = text(
+            "HASIL OCR",
+            12,
+            MUTED
+        );
+        resultHeading.setTypeface(null, Typeface.BOLD);
+        resultHeading.setPadding(dp(5), dp(8), 0, dp(5));
+
+        panel.addView(header);
         panel.addView(address);
         panel.addView(buttons);
 
-        panel.addView(googleTitle);
+        TextView browserHeading = text(
+            "BROWSER",
+            12,
+            MUTED
+        );
+        browserHeading.setPadding(dp(5), dp(8), 0, dp(5));
+        panel.addView(browserHeading);
 
-        panel.addView(web,
+        LinearLayout.LayoutParams webParams =
             new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 0,
-                1
-            )
-        );
+                0.8f
+            );
 
-        panel.addView(cameraTitle);
+        panel.addView(web, webParams);
+        panel.addView(cameraHeading);
 
-        panel.addView(previewView,
+        LinearLayout.LayoutParams cameraParams =
             new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 0,
-                1
-            )
-        );
+                1.3f
+            );
+
+        panel.addView(previewView, cameraParams);
+        panel.addView(resultHeading);
 
         panel.addView(resultScroll,
             new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                85
+                dp(155)
             )
         );
 
         int width = (int) (
-            getResources().getDisplayMetrics().widthPixels
-            * 0.94f
+            getResources().getDisplayMetrics().widthPixels * 0.96f
         );
 
         int height = (int) (
-            getResources().getDisplayMetrics().heightPixels
-            * 0.85f
+            getResources().getDisplayMetrics().heightPixels * 0.88f
         );
 
         WindowManager.LayoutParams params =
@@ -254,16 +379,11 @@ public class MainActivity extends ComponentActivity {
             );
 
         params.gravity = Gravity.CENTER;
-
         wm.addView(panel, params);
-
-        web.loadUrl("https://www.google.com");
 
         address.setOnEditorActionListener(
             (v, actionId, event) -> {
-
-                String url = address.getText()
-                    .toString().trim();
+                String url = address.getText().toString().trim();
 
                 if (!url.startsWith("http://")
                     && !url.startsWith("https://")) {
@@ -275,29 +395,30 @@ public class MainActivity extends ComponentActivity {
             }
         );
 
-        galleryButton.setOnClickListener(
-            v -> selectImage()
-        );
+        galleryButton.setOnClickListener(v -> selectImage());
 
         liveButton.setOnClickListener(v -> {
 
-            if (previewView.getVisibility()
-                == View.VISIBLE) {
-
+            if (cameraRequested) {
+                cameraRequested = false;
                 stopLiveCamera();
 
                 previewView.setVisibility(View.GONE);
-                cameraTitle.setVisibility(View.GONE);
+                cameraHeading.setVisibility(View.GONE);
 
-                liveButton.setText("LIVE CAM");
+                liveButton.setText("Live Cam");
 
             } else {
+                cameraRequested = true;
+
+                previewView.setVisibility(View.VISIBLE);
+                cameraHeading.setVisibility(View.VISIBLE);
+
                 startLiveCamera();
             }
         });
 
         copyButton.setOnClickListener(v -> {
-
             ClipboardManager clipboard =
                 (ClipboardManager) getSystemService(
                     Context.CLIPBOARD_SERVICE
@@ -313,13 +434,16 @@ public class MainActivity extends ComponentActivity {
 
         closeButton.setOnClickListener(v -> {
 
+            cameraRequested = false;
             stopLiveCamera();
 
             if (web != null) {
                 web.destroy();
             }
 
-            wm.removeView(panel);
+            if (panel != null) {
+                wm.removeView(panel);
+            }
 
             panel = null;
             web = null;
@@ -331,7 +455,9 @@ public class MainActivity extends ComponentActivity {
 
     private void startLiveCamera() {
 
-        if (previewView == null) return;
+        if (previewView == null || !cameraRequested) return;
+
+        if (cameraStarting || cameraBound) return;
 
         if (ContextCompat.checkSelfPermission(
             this,
@@ -340,20 +466,17 @@ public class MainActivity extends ComponentActivity {
 
             ActivityCompat.requestPermissions(
                 this,
-                new String[]{
-                    Manifest.permission.CAMERA
-                },
+                new String[]{Manifest.permission.CAMERA},
                 CAMERA_PERMISSION
             );
-
             return;
         }
 
-        previewView.setVisibility(View.VISIBLE);
+        cameraStarting = true;
 
-        resultText.setText(
-            "Menyiapkan kamera..."
-        );
+        if (resultText != null) {
+            resultText.setText("Menyiapkan kamera...");
+        }
 
         ListenableFuture<ProcessCameraProvider> future =
             ProcessCameraProvider.getInstance(this);
@@ -361,10 +484,14 @@ public class MainActivity extends ComponentActivity {
         future.addListener(() -> {
 
             try {
+                if (!cameraRequested || previewView == null) {
+                    cameraStarting = false;
+                    return;
+                }
+
                 cameraProvider = future.get();
 
-                Preview preview =
-                    new Preview.Builder().build();
+                Preview preview = new Preview.Builder().build();
 
                 preview.setSurfaceProvider(
                     previewView.getSurfaceProvider()
@@ -391,26 +518,25 @@ public class MainActivity extends ComponentActivity {
                     analysis
                 );
 
+                cameraBound = true;
+                cameraStarting = false;
+
                 runOnUiThread(() -> {
-
-                    if (previewView != null) {
-                        previewView.setVisibility(
-                            View.VISIBLE
-                        );
-                    }
-
-                    if (liveButton != null) {
-                        liveButton.setText("STOP CAM");
-                    }
-
                     if (resultText != null) {
                         resultText.setText(
                             "Kamera aktif. Arahkan ke tulisan."
                         );
                     }
+
+                    if (liveButton != null) {
+                        liveButton.setText("Stop Cam");
+                    }
                 });
 
             } catch (Exception e) {
+
+                cameraStarting = false;
+                cameraBound = false;
 
                 runOnUiThread(() -> {
                     if (resultText != null) {
@@ -431,8 +557,7 @@ public class MainActivity extends ComponentActivity {
             return;
         }
 
-        android.media.Image mediaImage =
-            imageProxy.getImage();
+        android.media.Image mediaImage = imageProxy.getImage();
 
         if (mediaImage == null) {
             processing.set(false);
@@ -440,30 +565,27 @@ public class MainActivity extends ComponentActivity {
             return;
         }
 
-        InputImage image =
-            InputImage.fromMediaImage(
-                mediaImage,
-                imageProxy.getImageInfo()
-                    .getRotationDegrees()
-            );
+        InputImage image = InputImage.fromMediaImage(
+            mediaImage,
+            imageProxy.getImageInfo().getRotationDegrees()
+        );
 
         recognizer.process(image)
             .addOnSuccessListener(result -> {
 
-                String text = result.getText();
+                String recognized = result.getText();
 
-                if (resultText != null && !text.isEmpty()) {
+                if (!recognized.isEmpty()) {
                     runOnUiThread(() -> {
-                        if (resultText != null) {
-                            resultText.setText(text);
+                        if (resultText != null && cameraRequested) {
+                            resultText.setText(recognized);
                         }
                     });
                 }
             })
             .addOnFailureListener(e -> {
-
                 runOnUiThread(() -> {
-                    if (resultText != null) {
+                    if (resultText != null && cameraRequested) {
                         resultText.setText(
                             "Gagal membaca: " + e.getMessage()
                         );
@@ -471,7 +593,6 @@ public class MainActivity extends ComponentActivity {
                 });
             })
             .addOnCompleteListener(task -> {
-
                 processing.set(false);
                 imageProxy.close();
             });
@@ -479,28 +600,25 @@ public class MainActivity extends ComponentActivity {
 
     private void stopLiveCamera() {
 
+        cameraStarting = false;
+        cameraBound = false;
+
         if (cameraProvider != null) {
             cameraProvider.unbindAll();
             cameraProvider = null;
         }
 
         if (liveButton != null) {
-            liveButton.setText("LIVE CAM");
+            liveButton.setText("Live Cam");
         }
     }
 
     private void selectImage() {
 
-        Intent intent = new Intent(
-            Intent.ACTION_GET_CONTENT
-        );
-
+        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
         intent.setType("image/*");
 
-        startActivityForResult(
-            intent,
-            PICK_IMAGE
-        );
+        startActivityForResult(intent, PICK_IMAGE);
     }
 
     @Override
@@ -510,24 +628,19 @@ public class MainActivity extends ComponentActivity {
         int[] grantResults
     ) {
         super.onRequestPermissionsResult(
-            requestCode,
-            permissions,
-            grantResults
+            requestCode, permissions, grantResults
         );
 
         if (requestCode == CAMERA_PERMISSION
             && grantResults.length > 0
-            && grantResults[0]
-                == PackageManager.PERMISSION_GRANTED) {
+            && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
 
             startLiveCamera();
 
         } else if (requestCode == CAMERA_PERMISSION) {
 
             if (resultText != null) {
-                resultText.setText(
-                    "Izin kamera belum diberikan."
-                );
+                resultText.setText("Izin kamera belum diberikan.");
             }
         }
     }
@@ -538,84 +651,37 @@ public class MainActivity extends ComponentActivity {
         int resultCode,
         Intent data
     ) {
-        super.onActivityResult(
-            requestCode,
-            resultCode,
-            data
-        );
+        super.onActivityResult(requestCode, resultCode, data);
 
         if (requestCode == PICK_IMAGE
-            && resultCode == RESULT_OK
+            && resultCode == Activity.RESULT_OK
             && data != null
             && data.getData() != null) {
 
             Uri imageUri = data.getData();
 
             if (resultText != null) {
-                resultText.setText(
-                    "Sedang membaca gambar..."
-                );
+                resultText.setText("Sedang membaca gambar...");
             }
 
             try {
-                InputImage image =
-                    InputImage.fromFilePath(
-                        this,
-                        imageUri
-                    );
+                InputImage image = InputImage.fromFilePath(
+                    this, imageUri
+                );
 
                 recognizer.process(image)
                     .addOnSuccessListener(result -> {
 
                         if (resultText != null) {
+                            String recognized = result.getText();
 
-                            String text = result.getText();
-
-                            if (text.isEmpty()) {
-                                resultText.setText(
-                                    "Tidak ada tulisan ditemukan."
-                                );
-                            } else {
-                                resultText.setText(text);
-                            }
+                            resultText.setText(
+                                recognized.isEmpty()
+                                    ? "Tidak ada tulisan ditemukan."
+                                    : recognized
+                            );
                         }
                     })
                     .addOnFailureListener(e -> {
 
-                        if (resultText != null) {
-                            resultText.setText(
-                                "Gagal membaca gambar: "
-                                + e.getMessage()
-                            );
-                        }
-                    });
-
-            } catch (Exception e) {
-
-                if (resultText != null) {
-                    resultText.setText(
-                        "Gagal membuka gambar: "
-                        + e.getMessage()
-                    );
-                }
-            }
-        }
-    }
-
-    @Override
-    protected void onDestroy() {
-
-        stopLiveCamera();
-
-        if (recognizer != null) {
-            recognizer.close();
-        }
-
-        if (cameraExecutor != null) {
-            cameraExecutor.shutdown();
-        }
-
-        super.onDestroy();
-    }
-    }
-            
+                        if (resultText != n
