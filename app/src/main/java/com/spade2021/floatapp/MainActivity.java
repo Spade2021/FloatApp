@@ -1,3 +1,4 @@
+
 package com.spade2021.floatapp;
 
 import android.app.Activity;
@@ -8,7 +9,7 @@ import android.net.Uri;
 import android.graphics.PixelFormat;
 import android.view.Gravity;
 import android.view.WindowManager;
-import android.view.View;
+import android.view.inputmethod.EditorInfo;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -17,6 +18,10 @@ import android.webkit.WebViewClient;
 import android.webkit.WebSettings;
 
 public class MainActivity extends Activity {
+
+    private WindowManager wm;
+    private LinearLayout panel;
+    private WebView web;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -32,12 +37,19 @@ public class MainActivity extends Activity {
         }
 
         showFloatingButton();
-        finish();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        if (Settings.canDrawOverlays(this) && wm == null) {
+            showFloatingButton();
+        }
     }
 
     private void showFloatingButton() {
-        WindowManager wm =
-            (WindowManager) getSystemService(WINDOW_SERVICE);
+        wm = (WindowManager) getSystemService(WINDOW_SERVICE);
 
         Button floatButton = new Button(this);
         floatButton.setText("FLOAT");
@@ -52,43 +64,59 @@ public class MainActivity extends Activity {
             );
 
         params.gravity = Gravity.TOP | Gravity.START;
-        params.x = 50;
+        params.x = 30;
         params.y = 200;
 
         wm.addView(floatButton, params);
 
-        floatButton.setOnClickListener(v -> {
-            showFloatingBrowser(wm);
-        });
+        floatButton.setOnClickListener(v -> showFloatingBrowser());
     }
 
-    private void showFloatingBrowser(WindowManager wm) {
-        LinearLayout panel = new LinearLayout(this);
+    private void showFloatingBrowser() {
+        if (panel != null) return;
+
+        panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setBackgroundColor(0xFFFFFFFF);
 
         EditText address = new EditText(this);
         address.setSingleLine(true);
         address.setText("https://www.google.com");
+        address.setHint("Masukkan alamat website");
+        address.setImeOptions(EditorInfo.IME_ACTION_GO);
 
         Button close = new Button(this);
         close.setText("TUTUP");
 
-        WebView web = new WebView(this);
+        web = new WebView(this);
         web.setWebViewClient(new WebViewClient());
-        web.getSettings().setJavaScriptEnabled(true);
-        web.loadUrl("https://www.google.com");
+
+        WebSettings settings = web.getSettings();
+        settings.setJavaScriptEnabled(true);
+        settings.setDomStorageEnabled(true);
 
         panel.addView(address);
         panel.addView(close);
-        panel.addView(web, new LinearLayout.LayoutParams(
-            600, 700
-        ));
+
+        LinearLayout.LayoutParams webParams =
+            new LinearLayout.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                0,
+                1
+            );
+
+        panel.addView(web, webParams);
+
+        int width = (int) (getResources()
+            .getDisplayMetrics().widthPixels * 0.90f);
+
+        int height = (int) (getResources()
+            .getDisplayMetrics().heightPixels * 0.75f);
 
         WindowManager.LayoutParams params =
             new WindowManager.LayoutParams(
-                650,
-                850,
+                width,
+                height,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
                 PixelFormat.TRANSLUCENT
@@ -98,10 +126,13 @@ public class MainActivity extends Activity {
 
         wm.addView(panel, params);
 
+        web.loadUrl("https://www.google.com");
+
         address.setOnEditorActionListener((v, actionId, event) -> {
             String url = address.getText().toString().trim();
 
-            if (!url.startsWith("http")) {
+            if (!url.startsWith("http://")
+                    && !url.startsWith("https://")) {
                 url = "https://" + url;
             }
 
@@ -112,6 +143,8 @@ public class MainActivity extends Activity {
         close.setOnClickListener(v -> {
             web.destroy();
             wm.removeView(panel);
+            panel = null;
+            web = null;
         });
     }
 }
