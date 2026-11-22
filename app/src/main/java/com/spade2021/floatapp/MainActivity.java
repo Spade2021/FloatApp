@@ -30,6 +30,7 @@ public class MainActivity extends Activity {
     private android.view.View floatingButton, panelView;
     private EditText searchInput;
     private WebView webView;
+    private Button backButton, forwardButton;
 
     private boolean buttonAdded = false;
     private boolean panelVisible = false;
@@ -210,6 +211,20 @@ public class MainActivity extends Activity {
         showPanel();
     }
 
+    private void updateHistoryButtons() {
+        if (webView == null) return;
+
+        if (backButton != null) {
+            backButton.setEnabled(webView.canGoBack());
+            backButton.setAlpha(webView.canGoBack() ? 1f : 0.4f);
+        }
+
+        if (forwardButton != null) {
+            forwardButton.setEnabled(webView.canGoForward());
+            forwardButton.setAlpha(webView.canGoForward() ? 1f : 0.4f);
+        }
+    }
+
     private void showPanel() {
         if (panelVisible) return;
 
@@ -304,6 +319,53 @@ public class MainActivity extends Activity {
         searchParams.topMargin = dp(4);
         root.addView(search, searchParams);
 
+        // Tombol kembali dan maju
+        LinearLayout historyBar = new LinearLayout(this);
+        historyBar.setOrientation(LinearLayout.HORIZONTAL);
+
+        backButton = new Button(this);
+        backButton.setText("← Kembali");
+        backButton.setTextColor(WHITE);
+        backButton.setTextSize(12);
+        backButton.setBackgroundTintList(
+            android.content.res.ColorStateList.valueOf(PANEL)
+        );
+
+        forwardButton = new Button(this);
+        forwardButton.setText("Maju →");
+        forwardButton.setTextColor(WHITE);
+        forwardButton.setTextSize(12);
+        forwardButton.setBackgroundTintList(
+            android.content.res.ColorStateList.valueOf(PANEL)
+        );
+
+        LinearLayout.LayoutParams historyParams =
+            new LinearLayout.LayoutParams(0, dp(40), 1);
+        historyParams.rightMargin = dp(4);
+        historyBar.addView(backButton, historyParams);
+
+        LinearLayout.LayoutParams forwardParams =
+            new LinearLayout.LayoutParams(0, dp(40), 1);
+        forwardParams.leftMargin = dp(4);
+        historyBar.addView(forwardButton, forwardParams);
+
+        LinearLayout.LayoutParams historyRowParams =
+            new LinearLayout.LayoutParams(-1, dp(40));
+        historyRowParams.topMargin = dp(4);
+        root.addView(historyBar, historyRowParams);
+
+        backButton.setOnClickListener(v -> {
+            if (webView != null && webView.canGoBack()) {
+                webView.goBack();
+            }
+        });
+
+        forwardButton.setOnClickListener(v -> {
+            if (webView != null && webView.canGoForward()) {
+                webView.goForward();
+            }
+        });
+
         TextView info = new TextView(this);
         info.setText("Filter iklan aktif");
         info.setTextColor(MUTED);
@@ -357,6 +419,8 @@ public class MainActivity extends Activity {
                 if (url != null && url.startsWith("http")) {
                     saveValue("last_url", url);
                 }
+
+                runOnUiThread(() -> updateHistoryButtons());
             }
         });
 
@@ -422,6 +486,8 @@ public class MainActivity extends Activity {
             } else {
                 webView.loadUrl("https://www.google.com");
             }
+
+            updateHistoryButtons();
         } catch (Exception e) {
             panelView = null;
             Toast.makeText(this, "Panel gagal dibuka",
@@ -487,6 +553,8 @@ public class MainActivity extends Activity {
             webView = null;
         }
 
+        backButton = null;
+        forwardButton = null;
         panelView = null;
         searchInput = null;
         panelVisible = false;
@@ -505,5 +573,5 @@ public class MainActivity extends Activity {
         buttonAdded = false;
         super.onDestroy();
     }
-    }
-            
+                }
+                
