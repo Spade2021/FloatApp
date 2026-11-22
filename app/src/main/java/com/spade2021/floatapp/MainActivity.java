@@ -18,8 +18,6 @@ import android.view.inputmethod.EditorInfo;
 import android.view.KeyEvent;
 import android.widget.*;
 import android.webkit.*;
-import android.text.TextWatcher;
-import android.text.Editable;
 
 import java.io.ByteArrayInputStream;
 import java.util.Arrays;
@@ -182,15 +180,15 @@ public class MainActivity extends Activity {
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(16), dp(14), dp(16), dp(16));
-        root.setBackground(rounded(BG, 20));
+        root.setPadding(dp(12), dp(8), dp(12), dp(8));
+        root.setBackground(rounded(BG, 16));
 
         LinearLayout header = new LinearLayout(this);
         header.setGravity(Gravity.CENTER_VERTICAL);
 
         TextView title = new TextView(this);
         title.setText("FloatApp");
-        title.setTextSize(19);
+        title.setTextSize(18);
         title.setTextColor(WHITE);
         title.setTypeface(null, android.graphics.Typeface.BOLD);
 
@@ -200,8 +198,8 @@ public class MainActivity extends Activity {
         close.setTextColor(WHITE);
         close.setGravity(Gravity.CENTER);
 
-        header.addView(title, new LinearLayout.LayoutParams(0, dp(42), 1));
-        header.addView(close, new LinearLayout.LayoutParams(dp(42), dp(42)));
+        header.addView(title, new LinearLayout.LayoutParams(0, dp(34), 1));
+        header.addView(close, new LinearLayout.LayoutParams(dp(40), dp(34)));
         close.setOnClickListener(v -> hidePanel());
         root.addView(header);
 
@@ -217,14 +215,12 @@ public class MainActivity extends Activity {
         duck.setTextColor(WHITE);
 
         LinearLayout.LayoutParams p1 =
-            new LinearLayout.LayoutParams(0, dp(46), 1);
-        p1.topMargin = dp(12);
+            new LinearLayout.LayoutParams(0, dp(42), 1);
         p1.rightMargin = dp(4);
         engines.addView(google, p1);
 
         LinearLayout.LayoutParams p2 =
-            new LinearLayout.LayoutParams(0, dp(46), 1);
-        p2.topMargin = dp(12);
+            new LinearLayout.LayoutParams(0, dp(42), 1);
         p2.leftMargin = dp(4);
         engines.addView(duck, p2);
 
@@ -235,24 +231,16 @@ public class MainActivity extends Activity {
         searchInput.setTextColor(WHITE);
         searchInput.setHintTextColor(MUTED);
         searchInput.setHint("Cari atau masukkan alamat website");
-        searchInput.setTextSize(14);
+        searchInput.setTextSize(16);
         searchInput.setPadding(dp(12), 0, dp(12), 0);
-        searchInput.setBackground(rounded(PANEL, 12));
+        searchInput.setBackground(rounded(PANEL, 10));
         searchInput.setImeOptions(EditorInfo.IME_ACTION_GO);
         searchInput.setText(prefs.getString("last_query", ""));
 
         LinearLayout.LayoutParams inputParams =
             new LinearLayout.LayoutParams(-1, dp(48));
-        inputParams.topMargin = dp(10);
+        inputParams.topMargin = dp(5);
         root.addView(searchInput, inputParams);
-
-        searchInput.addTextChangedListener(new TextWatcher() {
-            public void beforeTextChanged(CharSequence s, int a, int c, int f) {}
-            public void onTextChanged(CharSequence s, int a, int b, int c) {
-                saveValue("last_query", s.toString());
-            }
-            public void afterTextChanged(Editable e) {}
-        });
 
         Button search = new Button(this);
         search.setText("Cari / Buka");
@@ -262,16 +250,16 @@ public class MainActivity extends Activity {
         );
 
         LinearLayout.LayoutParams searchParams =
-            new LinearLayout.LayoutParams(-1, dp(46));
-        searchParams.topMargin = dp(8);
+            new LinearLayout.LayoutParams(-1, dp(42));
+        searchParams.topMargin = dp(4);
         root.addView(search, searchParams);
 
         TextView info = new TextView(this);
         info.setText("Filter iklan aktif");
         info.setTextColor(MUTED);
-        info.setTextSize(11);
+        info.setTextSize(10);
         info.setGravity(Gravity.CENTER);
-        root.addView(info, new LinearLayout.LayoutParams(-1, dp(24)));
+        root.addView(info, new LinearLayout.LayoutParams(-1, dp(18)));
 
         webView = new WebView(this);
         webView.setBackgroundColor(Color.WHITE);
@@ -326,7 +314,9 @@ public class MainActivity extends Activity {
 
         LinearLayout.LayoutParams webParams =
             new LinearLayout.LayoutParams(-1, 0, 1);
-        webParams.topMargin = dp(10);
+
+        webParams.topMargin = dp(2);
+        webParams.bottomMargin = 0;
         root.addView(webView, webParams);
 
         updateEngineButtons(google, duck);
@@ -361,7 +351,7 @@ public class MainActivity extends Activity {
 
         WindowManager.LayoutParams params =
             new WindowManager.LayoutParams(
-                dp(340), dp(520),
+                dp(370), dp(650),
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
                 PixelFormat.TRANSLUCENT
