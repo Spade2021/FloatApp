@@ -358,6 +358,7 @@ public class MainActivity extends Activity {
             );
 
         params.gravity = Gravity.CENTER;
+        params.y = -dp(35);
 
         try {
             wm.addView(panelView, params);
@@ -455,5 +456,5 @@ public class MainActivity extends Activity {
         buttonAdded = false;
         super.onDestroy();
     }
-            }
-            
+    }
+                             
