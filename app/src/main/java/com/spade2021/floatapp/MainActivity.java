@@ -4,6 +4,8 @@ package com.spade2021.floatapp;
 import android.app.Activity;
 import android.os.Bundle;
 import android.content.Intent;
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.net.Uri;
 import android.provider.Settings;
 import android.graphics.Color;
@@ -12,12 +14,13 @@ import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
-import android.content.Context;
 import android.view.inputmethod.InputMethodManager;
 import android.view.inputmethod.EditorInfo;
 import android.view.KeyEvent;
 import android.widget.*;
 import android.webkit.*;
+import android.text.TextWatcher;
+import android.text.Editable;
 
 public class MainActivity extends Activity {
 
@@ -25,8 +28,12 @@ public class MainActivity extends Activity {
     private View floatingButton, panelView;
     private EditText searchInput;
     private WebView webView;
+
     private boolean buttonAdded = false;
     private boolean panelVisible = false;
+    private boolean useDuckDuckGo = false;
+
+    private SharedPreferences prefs;
 
     private final int BG = Color.rgb(20, 22, 29);
     private final int PANEL = Color.rgb(34, 37, 46);
@@ -46,10 +53,15 @@ public class MainActivity extends Activity {
         return shape;
     }
 
+    private void saveValue(String key, String value) {
+        prefs.edit().putString(key, value).apply();
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        prefs = getSharedPreferences("FloatAppData", MODE_PRIVATE);
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
 
         TextView message = new TextView(this);
@@ -77,6 +89,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+
         if (Settings.canDrawOverlays(this) && !buttonAdded) {
             showFloatingButton();
         }
@@ -120,6 +133,8 @@ public class MainActivity extends Activity {
     private void showPanel() {
         if (panelVisible) return;
 
+        useDuckDuckGo = prefs.getBoolean("duckduckgo", false);
+
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(16), dp(14), dp(16), dp(16));
@@ -145,6 +160,31 @@ public class MainActivity extends Activity {
         close.setOnClickListener(v -> hidePanel());
         root.addView(header);
 
+        LinearLayout engineButtons = new LinearLayout(this);
+        engineButtons.setOrientation(LinearLayout.HORIZONTAL);
+
+        Button googleButton = new Button(this);
+        googleButton.setText("Google");
+        googleButton.setTextColor(WHITE);
+
+        Button duckButton = new Button(this);
+        duckButton.setText("DuckDuckGo");
+        duckButton.setTextColor(WHITE);
+
+        LinearLayout.LayoutParams engineParams =
+            new LinearLayout.LayoutParams(0, dp(46), 1);
+        engineParams.topMargin = dp(12);
+        engineParams.rightMargin = dp(4);
+        engineButtons.addView(googleButton, engineParams);
+
+        LinearLayout.LayoutParams duckParams =
+            new LinearLayout.LayoutParams(0, dp(46), 1);
+        duckParams.topMargin = dp(12);
+        duckParams.leftMargin = dp(4);
+        engineButtons.addView(duckButton, duckParams);
+
+        root.addView(engineButtons);
+
         searchInput = new EditText(this);
         searchInput.setSingleLine(true);
         searchInput.setTextColor(WHITE);
@@ -155,10 +195,25 @@ public class MainActivity extends Activity {
         searchInput.setBackground(rounded(PANEL, 12));
         searchInput.setImeOptions(EditorInfo.IME_ACTION_GO);
 
+        String savedQuery = prefs.getString("last_query", "");
+        searchInput.setText(savedQuery);
+
         LinearLayout.LayoutParams inputParams =
             new LinearLayout.LayoutParams(-1, dp(48));
-        inputParams.topMargin = dp(12);
+        inputParams.topMargin = dp(10);
         root.addView(searchInput, inputParams);
+
+        searchInput.addTextChangedListener(new TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int start,
+                                          int count, int after) {}
+
+            public void onTextChanged(CharSequence s, int start,
+                                      int before, int count) {
+                saveValue("last_query", s.toString());
+            }
+
+            public void afterTextChanged(Editable e) {}
+        });
 
         Button searchButton = new Button(this);
         searchButton.setText("Cari / Buka");
@@ -176,13 +231,40 @@ public class MainActivity extends Activity {
         webView.setBackgroundColor(Color.WHITE);
         webView.getSettings().setJavaScriptEnabled(true);
         webView.getSettings().setDomStorageEnabled(true);
-        webView.setWebViewClient(new WebViewClient());
+
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+
+                if (url != null && url.startsWith("http")) {
+                    saveValue("last_url", url);
+                }
+            }
+        });
+
         webView.setWebChromeClient(new WebChromeClient());
 
         LinearLayout.LayoutParams webParams =
             new LinearLayout.LayoutParams(-1, 0, 1);
         webParams.topMargin = dp(12);
         root.addView(webView, webParams);
+
+        updateEngineButtons(googleButton, duckButton);
+
+        googleButton.setOnClickListener(v -> {
+            useDuckDuckGo = false;
+            prefs.edit().putBoolean("duckduckgo", false).apply();
+            updateEngineButtons(googleButton, duckButton);
+            webView.loadUrl("https://www.google.com");
+        });
+
+        duckButton.setOnClickListener(v -> {
+            useDuckDuckGo = true;
+            prefs.edit().putBoolean("duckduckgo", true).apply();
+            updateEngineButtons(googleButton, duckButton);
+            webView.loadUrl("https://duckduckgo.com");
+        });
 
         searchButton.setOnClickListener(v -> performSearch());
 
@@ -211,11 +293,36 @@ public class MainActivity extends Activity {
         try {
             wm.addView(panelView, params);
             panelVisible = true;
+
+            String lastUrl = prefs.getString("last_url", "");
+
+            if (!lastUrl.isEmpty()) {
+                webView.loadUrl(lastUrl);
+            } else if (useDuckDuckGo) {
+                webView.loadUrl("https://duckduckgo.com");
+            } else {
+                webView.loadUrl("https://www.google.com");
+            }
+
         } catch (Exception e) {
             panelView = null;
             Toast.makeText(this, "Panel gagal dibuka",
                 Toast.LENGTH_SHORT).show();
         }
+    }
+
+    private void updateEngineButtons(Button google, Button duck) {
+        google.setBackgroundTintList(
+            android.content.res.ColorStateList.valueOf(
+                useDuckDuckGo ? PANEL : BLUE
+            )
+        );
+
+        duck.setBackgroundTintList(
+            android.content.res.ColorStateList.valueOf(
+                useDuckDuckGo ? BLUE : PANEL
+            )
+        );
     }
 
     private void performSearch() {
@@ -226,13 +333,19 @@ public class MainActivity extends Activity {
 
         String url;
 
-        if (query.startsWith("https://") || query.startsWith("http://")) {
+        if (query.startsWith("https://") ||
+            query.startsWith("http://")) {
             url = query;
         } else if (query.contains(".") && !query.contains(" ")) {
             url = "https://" + query;
+        } else if (useDuckDuckGo) {
+            url = "https://duckduckgo.com/?q=" + Uri.encode(query);
         } else {
             url = "https://www.google.com/search?q=" + Uri.encode(query);
         }
+
+        saveValue("last_query", query);
+        saveValue("last_url", url);
 
         webView.loadUrl(url);
 
@@ -276,5 +389,4 @@ public class MainActivity extends Activity {
         buttonAdded = false;
         super.onDestroy();
     }
-            }
-    
+}
