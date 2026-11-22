@@ -34,14 +34,11 @@ public class MainActivity extends Activity {
     private boolean buttonAdded = false;
     private boolean panelVisible = false;
     private boolean useDuckDuckGo = false;
+    private boolean darkMode = true;
 
     private SharedPreferences prefs;
 
-    private final int BG = Color.rgb(20, 22, 29);
-    private final int PANEL = Color.rgb(34, 37, 46);
-    private final int BLUE = Color.rgb(65, 125, 255);
-    private final int WHITE = Color.WHITE;
-    private final int MUTED = Color.rgb(165, 170, 185);
+    private int BG, PANEL, BLUE, WHITE, MUTED, BUTTON_TEXT;
 
     private final Set<String> blockedHosts = new HashSet<>(
         Arrays.asList(
@@ -62,6 +59,24 @@ public class MainActivity extends Activity {
     private int dp(float value) {
         return (int) (value * getResources()
             .getDisplayMetrics().density);
+    }
+
+    private void applyTheme() {
+        if (darkMode) {
+            BG = Color.rgb(20, 22, 29);
+            PANEL = Color.rgb(40, 43, 52);
+            BLUE = Color.rgb(65, 125, 255);
+            WHITE = Color.WHITE;
+            MUTED = Color.rgb(165, 170, 185);
+            BUTTON_TEXT = Color.WHITE;
+        } else {
+            BG = Color.rgb(245, 245, 245);
+            PANEL = Color.rgb(225, 225, 225);
+            BLUE = Color.rgb(65, 125, 255);
+            WHITE = Color.rgb(25, 25, 25);
+            MUTED = Color.rgb(100, 100, 100);
+            BUTTON_TEXT = Color.WHITE;
+        }
     }
 
     private GradientDrawable rounded(int color, int radius) {
@@ -107,6 +122,9 @@ public class MainActivity extends Activity {
         prefs = getSharedPreferences("FloatAppData", MODE_PRIVATE);
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
 
+        darkMode = prefs.getBoolean("dark_mode", true);
+        applyTheme();
+
         TextView message = new TextView(this);
         message.setText("FloatApp\n\nAktifkan izin tampil di atas aplikasi lain.");
         message.setTextColor(WHITE);
@@ -142,7 +160,9 @@ public class MainActivity extends Activity {
         if (buttonAdded) return;
 
         TextView button = new TextView(this);
-        button.setBackground(rounded(WHITE, 50));
+        button.setBackground(rounded(
+            darkMode ? Color.WHITE : Color.BLACK, 50
+        ));
         floatingButton = button;
 
         WindowManager.LayoutParams params =
@@ -155,7 +175,7 @@ public class MainActivity extends Activity {
 
         params.gravity = Gravity.BOTTOM | Gravity.LEFT;
         params.x = dp(12);
-        params.y = dp(110);
+        params.y = dp(65);
 
         button.setOnClickListener(v -> togglePanel());
 
@@ -168,15 +188,33 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void updateFloatingButton() {
+        if (floatingButton != null) {
+            floatingButton.setBackground(rounded(
+                darkMode ? Color.WHITE : Color.BLACK, 50
+            ));
+        }
+    }
+
     private void togglePanel() {
         if (panelVisible) hidePanel();
         else showPanel();
+    }
+
+    private void changeTheme() {
+        darkMode = !darkMode;
+        prefs.edit().putBoolean("dark_mode", darkMode).apply();
+        applyTheme();
+        hidePanel();
+        updateFloatingButton();
+        showPanel();
     }
 
     private void showPanel() {
         if (panelVisible) return;
 
         useDuckDuckGo = prefs.getBoolean("duckduckgo", false);
+        applyTheme();
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -192,16 +230,28 @@ public class MainActivity extends Activity {
         title.setTextColor(WHITE);
         title.setTypeface(null, android.graphics.Typeface.BOLD);
 
+        Button themeButton = new Button(this);
+        themeButton.setText(darkMode ? "Putih" : "Hitam");
+        themeButton.setTextSize(11);
+        themeButton.setTextColor(WHITE);
+        themeButton.setBackgroundTintList(
+            android.content.res.ColorStateList.valueOf(BLUE)
+        );
+
         TextView close = new TextView(this);
         close.setText("✕");
         close.setTextSize(20);
         close.setTextColor(WHITE);
         close.setGravity(Gravity.CENTER);
 
-        header.addView(title, new LinearLayout.LayoutParams(0, dp(34), 1));
-        header.addView(close, new LinearLayout.LayoutParams(dp(40), dp(34)));
-        close.setOnClickListener(v -> hidePanel());
+        header.addView(title, new LinearLayout.LayoutParams(0, dp(38), 1));
+        header.addView(themeButton, new LinearLayout.LayoutParams(dp(85), dp(38)));
+        header.addView(close, new LinearLayout.LayoutParams(dp(38), dp(38)));
+
         root.addView(header);
+
+        themeButton.setOnClickListener(v -> changeTheme());
+        close.setOnClickListener(v -> hidePanel());
 
         LinearLayout engines = new LinearLayout(this);
         engines.setOrientation(LinearLayout.HORIZONTAL);
@@ -316,7 +366,6 @@ public class MainActivity extends Activity {
             new LinearLayout.LayoutParams(-1, 0, 1);
 
         webParams.topMargin = dp(2);
-        webParams.bottomMargin = 0;
         root.addView(webView, webParams);
 
         updateEngineButtons(google, duck);
@@ -457,4 +506,4 @@ public class MainActivity extends Activity {
         super.onDestroy();
     }
     }
-                             
+            
