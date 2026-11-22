@@ -12,7 +12,6 @@ import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
-import android.view.View;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.view.inputmethod.EditorInfo;
@@ -22,6 +21,7 @@ import android.webkit.*;
 import android.text.TextWatcher;
 import android.text.Editable;
 
+import java.io.ByteArrayInputStream;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
@@ -29,7 +29,7 @@ import java.util.Set;
 public class MainActivity extends Activity {
 
     private WindowManager wm;
-    private View floatingButton, panelView;
+    private android.view.View floatingButton, panelView;
     private EditText searchInput;
     private WebView webView;
 
@@ -88,8 +88,18 @@ public class MainActivity extends Activity {
                 return true;
             }
         }
-
         return false;
+    }
+
+    private WebResourceResponse emptyResponse() {
+        return new WebResourceResponse(
+            "text/plain",
+            "UTF-8",
+            200,
+            "OK",
+            null,
+            new ByteArrayInputStream(new byte[0])
+        );
     }
 
     @Override
@@ -195,30 +205,30 @@ public class MainActivity extends Activity {
         close.setOnClickListener(v -> hidePanel());
         root.addView(header);
 
-        LinearLayout engineButtons = new LinearLayout(this);
-        engineButtons.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout engines = new LinearLayout(this);
+        engines.setOrientation(LinearLayout.HORIZONTAL);
 
-        Button googleButton = new Button(this);
-        googleButton.setText("Google");
-        googleButton.setTextColor(WHITE);
+        Button google = new Button(this);
+        google.setText("Google");
+        google.setTextColor(WHITE);
 
-        Button duckButton = new Button(this);
-        duckButton.setText("DuckDuckGo");
-        duckButton.setTextColor(WHITE);
+        Button duck = new Button(this);
+        duck.setText("DuckDuckGo");
+        duck.setTextColor(WHITE);
 
-        LinearLayout.LayoutParams engineParams =
+        LinearLayout.LayoutParams p1 =
             new LinearLayout.LayoutParams(0, dp(46), 1);
-        engineParams.topMargin = dp(12);
-        engineParams.rightMargin = dp(4);
-        engineButtons.addView(googleButton, engineParams);
+        p1.topMargin = dp(12);
+        p1.rightMargin = dp(4);
+        engines.addView(google, p1);
 
-        LinearLayout.LayoutParams duckParams =
+        LinearLayout.LayoutParams p2 =
             new LinearLayout.LayoutParams(0, dp(46), 1);
-        duckParams.topMargin = dp(12);
-        duckParams.leftMargin = dp(4);
-        engineButtons.addView(duckButton, duckParams);
+        p2.topMargin = dp(12);
+        p2.leftMargin = dp(4);
+        engines.addView(duck, p2);
 
-        root.addView(engineButtons);
+        root.addView(engines);
 
         searchInput = new EditText(this);
         searchInput.setSingleLine(true);
@@ -229,9 +239,7 @@ public class MainActivity extends Activity {
         searchInput.setPadding(dp(12), 0, dp(12), 0);
         searchInput.setBackground(rounded(PANEL, 12));
         searchInput.setImeOptions(EditorInfo.IME_ACTION_GO);
-
-        String savedQuery = prefs.getString("last_query", "");
-        searchInput.setText(savedQuery);
+        searchInput.setText(prefs.getString("last_query", ""));
 
         LinearLayout.LayoutParams inputParams =
             new LinearLayout.LayoutParams(-1, dp(48));
@@ -239,63 +247,69 @@ public class MainActivity extends Activity {
         root.addView(searchInput, inputParams);
 
         searchInput.addTextChangedListener(new TextWatcher() {
-            public void beforeTextChanged(CharSequence s, int start,
-                                          int count, int after) {}
-
-            public void onTextChanged(CharSequence s, int start,
-                                      int before, int count) {
+            public void beforeTextChanged(CharSequence s, int a, int c, int f) {}
+            public void onTextChanged(CharSequence s, int a, int b, int c) {
                 saveValue("last_query", s.toString());
             }
-
             public void afterTextChanged(Editable e) {}
         });
 
-        Button searchButton = new Button(this);
-        searchButton.setText("Cari / Buka");
-        searchButton.setTextColor(WHITE);
-        searchButton.setBackgroundTintList(
+        Button search = new Button(this);
+        search.setText("Cari / Buka");
+        search.setTextColor(WHITE);
+        search.setBackgroundTintList(
             android.content.res.ColorStateList.valueOf(BLUE)
         );
 
-        LinearLayout.LayoutParams buttonParams =
+        LinearLayout.LayoutParams searchParams =
             new LinearLayout.LayoutParams(-1, dp(46));
-        buttonParams.topMargin = dp(8);
-        root.addView(searchButton, buttonParams);
+        searchParams.topMargin = dp(8);
+        root.addView(search, searchParams);
 
-        TextView filterInfo = new TextView(this);
-        filterInfo.setText("Perlindungan iklan dan pelacak aktif");
-        filterInfo.setTextColor(MUTED);
-        filterInfo.setTextSize(11);
-        filterInfo.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams infoParams =
-            new LinearLayout.LayoutParams(-1, dp(24));
-        infoParams.topMargin = dp(4);
-        root.addView(filterInfo, infoParams);
+        TextView info = new TextView(this);
+        info.setText("Filter iklan aktif");
+        info.setTextColor(MUTED);
+        info.setTextSize(11);
+        info.setGravity(Gravity.CENTER);
+        root.addView(info, new LinearLayout.LayoutParams(-1, dp(24)));
 
         webView = new WebView(this);
         webView.setBackgroundColor(Color.WHITE);
         webView.getSettings().setJavaScriptEnabled(true);
         webView.getSettings().setDomStorageEnabled(true);
+        webView.getSettings().setLoadWithOverviewMode(true);
+        webView.getSettings().setUseWideViewPort(true);
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
-            public boolean shouldInterceptRequest(
+            public WebResourceResponse shouldInterceptRequest(
                 WebView view, WebResourceRequest request) {
 
-                Uri uri = request.getUrl();
-
-                if (isAdHost(uri.getHost())) {
-                    return new WebResourceResponse(
-                        "text/plain",
-                        "UTF-8",
-                        204,
-                        "Blocked",
-                        null,
-                        new java.io.ByteArrayInputStream(new byte[0])
-                    );
+                if (isAdHost(request.getUrl().getHost())) {
+                    return emptyResponse();
                 }
 
                 return super.shouldInterceptRequest(view, request);
+            }
+
+            @Override
+            public void onReceivedError(
+                WebView view,
+                WebResourceRequest request,
+                WebResourceError error) {
+
+                super.onReceivedError(view, request, error);
+
+                if (request.isForMainFrame()) {
+                    runOnUiThread(() ->
+                        Toast.makeText(
+                            MainActivity.this,
+                            "Halaman gagal dimuat: " +
+                                error.getDescription(),
+                            Toast.LENGTH_LONG
+                        ).show()
+                    );
+                }
             }
 
             @Override
@@ -312,26 +326,26 @@ public class MainActivity extends Activity {
 
         LinearLayout.LayoutParams webParams =
             new LinearLayout.LayoutParams(-1, 0, 1);
-        webParams.topMargin = dp(12);
+        webParams.topMargin = dp(10);
         root.addView(webView, webParams);
 
-        updateEngineButtons(googleButton, duckButton);
+        updateEngineButtons(google, duck);
 
-        googleButton.setOnClickListener(v -> {
+        google.setOnClickListener(v -> {
             useDuckDuckGo = false;
             prefs.edit().putBoolean("duckduckgo", false).apply();
-            updateEngineButtons(googleButton, duckButton);
+            updateEngineButtons(google, duck);
             webView.loadUrl("https://www.google.com");
         });
 
-        duckButton.setOnClickListener(v -> {
+        duck.setOnClickListener(v -> {
             useDuckDuckGo = true;
             prefs.edit().putBoolean("duckduckgo", true).apply();
-            updateEngineButtons(googleButton, duckButton);
+            updateEngineButtons(google, duck);
             webView.loadUrl("https://duckduckgo.com");
         });
 
-        searchButton.setOnClickListener(v -> performSearch());
+        search.setOnClickListener(v -> performSearch());
 
         searchInput.setOnEditorActionListener((v, actionId, event) -> {
             if (actionId == EditorInfo.IME_ACTION_GO ||
@@ -368,7 +382,6 @@ public class MainActivity extends Activity {
             } else {
                 webView.loadUrl("https://www.google.com");
             }
-
         } catch (Exception e) {
             panelView = null;
             Toast.makeText(this, "Panel gagal dibuka",
@@ -411,13 +424,10 @@ public class MainActivity extends Activity {
 
         saveValue("last_query", query);
         saveValue("last_url", url);
-
         webView.loadUrl(url);
 
         InputMethodManager imm =
-            (InputMethodManager) getSystemService(
-                Context.INPUT_METHOD_SERVICE
-            );
+            (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
 
         if (imm != null) {
             imm.hideSoftInputFromWindow(searchInput.getWindowToken(), 0);
@@ -432,6 +442,7 @@ public class MainActivity extends Activity {
         }
 
         if (webView != null) {
+            webView.stopLoading();
             webView.destroy();
             webView = null;
         }
@@ -454,5 +465,5 @@ public class MainActivity extends Activity {
         buttonAdded = false;
         super.onDestroy();
     }
-    }
+            }
             
