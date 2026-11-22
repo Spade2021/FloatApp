@@ -22,6 +22,10 @@ import android.webkit.*;
 import android.text.TextWatcher;
 import android.text.Editable;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+
 public class MainActivity extends Activity {
 
     private WindowManager wm;
@@ -41,6 +45,22 @@ public class MainActivity extends Activity {
     private final int WHITE = Color.WHITE;
     private final int MUTED = Color.rgb(165, 170, 185);
 
+    private final Set<String> blockedHosts = new HashSet<>(
+        Arrays.asList(
+            "doubleclick.net",
+            "googlesyndication.com",
+            "googleadservices.com",
+            "adservice.google.com",
+            "adnxs.com",
+            "taboola.com",
+            "outbrain.com",
+            "scorecardresearch.com",
+            "adcolony.com",
+            "popads.net",
+            "popcash.net"
+        )
+    );
+
     private int dp(float value) {
         return (int) (value * getResources()
             .getDisplayMetrics().density);
@@ -55,6 +75,21 @@ public class MainActivity extends Activity {
 
     private void saveValue(String key, String value) {
         prefs.edit().putString(key, value).apply();
+    }
+
+    private boolean isAdHost(String host) {
+        if (host == null) return false;
+
+        String domain = host.toLowerCase();
+
+        for (String blocked : blockedHosts) {
+            if (domain.equals(blocked) ||
+                domain.endsWith("." + blocked)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     @Override
@@ -227,12 +262,42 @@ public class MainActivity extends Activity {
         buttonParams.topMargin = dp(8);
         root.addView(searchButton, buttonParams);
 
+        TextView filterInfo = new TextView(this);
+        filterInfo.setText("Perlindungan iklan dan pelacak aktif");
+        filterInfo.setTextColor(MUTED);
+        filterInfo.setTextSize(11);
+        filterInfo.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams infoParams =
+            new LinearLayout.LayoutParams(-1, dp(24));
+        infoParams.topMargin = dp(4);
+        root.addView(filterInfo, infoParams);
+
         webView = new WebView(this);
         webView.setBackgroundColor(Color.WHITE);
         webView.getSettings().setJavaScriptEnabled(true);
         webView.getSettings().setDomStorageEnabled(true);
 
         webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean shouldInterceptRequest(
+                WebView view, WebResourceRequest request) {
+
+                Uri uri = request.getUrl();
+
+                if (isAdHost(uri.getHost())) {
+                    return new WebResourceResponse(
+                        "text/plain",
+                        "UTF-8",
+                        204,
+                        "Blocked",
+                        null,
+                        new java.io.ByteArrayInputStream(new byte[0])
+                    );
+                }
+
+                return super.shouldInterceptRequest(view, request);
+            }
+
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
@@ -389,4 +454,5 @@ public class MainActivity extends Activity {
         buttonAdded = false;
         super.onDestroy();
     }
-}
+    }
+            
