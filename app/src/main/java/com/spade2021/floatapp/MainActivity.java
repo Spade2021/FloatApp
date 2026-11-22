@@ -34,12 +34,11 @@ public class MainActivity extends Activity {
 
     private boolean buttonAdded = false;
     private boolean panelVisible = false;
-    private boolean useDuckDuckGo = false;
     private boolean darkMode = true;
 
     private SharedPreferences prefs;
 
-    private int BG, PANEL, BLUE, WHITE, MUTED, BUTTON_TEXT;
+    private int BG, PANEL, BLUE, WHITE, MUTED;
 
     private final Set<String> blockedHosts = new HashSet<>(
         Arrays.asList(
@@ -69,14 +68,12 @@ public class MainActivity extends Activity {
             BLUE = Color.rgb(65, 125, 255);
             WHITE = Color.WHITE;
             MUTED = Color.rgb(165, 170, 185);
-            BUTTON_TEXT = Color.WHITE;
         } else {
             BG = Color.rgb(245, 245, 245);
             PANEL = Color.rgb(225, 225, 225);
             BLUE = Color.rgb(65, 125, 255);
             WHITE = Color.rgb(25, 25, 25);
             MUTED = Color.rgb(100, 100, 100);
-            BUTTON_TEXT = Color.WHITE;
         }
     }
 
@@ -127,7 +124,9 @@ public class MainActivity extends Activity {
         applyTheme();
 
         TextView message = new TextView(this);
-        message.setText("FloatApp\n\nAktifkan izin tampil di atas aplikasi lain.");
+        message.setText(
+            "FloatApp\n\nAktifkan izin tampil di atas aplikasi lain."
+        );
         message.setTextColor(WHITE);
         message.setTextSize(16);
         message.setGravity(Gravity.CENTER);
@@ -205,10 +204,32 @@ public class MainActivity extends Activity {
     private void changeTheme() {
         darkMode = !darkMode;
         prefs.edit().putBoolean("dark_mode", darkMode).apply();
+
         applyTheme();
         hidePanel();
         updateFloatingButton();
         showPanel();
+    }
+
+    private void stopFloatApp() {
+        hidePanel();
+
+        if (floatingButton != null && buttonAdded) {
+            try {
+                wm.removeView(floatingButton);
+            } catch (Exception ignored) {}
+        }
+
+        floatingButton = null;
+        buttonAdded = false;
+
+        Toast.makeText(
+            this,
+            "FloatApp dimatikan",
+            Toast.LENGTH_SHORT
+        ).show();
+
+        finish();
     }
 
     private void updateHistoryButtons() {
@@ -216,19 +237,22 @@ public class MainActivity extends Activity {
 
         if (backButton != null) {
             backButton.setEnabled(webView.canGoBack());
-            backButton.setAlpha(webView.canGoBack() ? 1f : 0.4f);
+            backButton.setAlpha(
+                webView.canGoBack() ? 1f : 0.4f
+            );
         }
 
         if (forwardButton != null) {
             forwardButton.setEnabled(webView.canGoForward());
-            forwardButton.setAlpha(webView.canGoForward() ? 1f : 0.4f);
+            forwardButton.setAlpha(
+                webView.canGoForward() ? 1f : 0.4f
+            );
         }
     }
 
     private void showPanel() {
         if (panelVisible) return;
 
-        useDuckDuckGo = prefs.getBoolean("duckduckgo", false);
         applyTheme();
 
         LinearLayout root = new LinearLayout(this);
@@ -248,7 +272,7 @@ public class MainActivity extends Activity {
         Button themeButton = new Button(this);
         themeButton.setText(darkMode ? "Putih" : "Hitam");
         themeButton.setTextSize(11);
-        themeButton.setTextColor(WHITE);
+        themeButton.setTextColor(Color.WHITE);
         themeButton.setBackgroundTintList(
             android.content.res.ColorStateList.valueOf(BLUE)
         );
@@ -259,37 +283,36 @@ public class MainActivity extends Activity {
         close.setTextColor(WHITE);
         close.setGravity(Gravity.CENTER);
 
-        header.addView(title, new LinearLayout.LayoutParams(0, dp(38), 1));
-        header.addView(themeButton, new LinearLayout.LayoutParams(dp(85), dp(38)));
-        header.addView(close, new LinearLayout.LayoutParams(dp(38), dp(38)));
+        header.addView(
+            title,
+            new LinearLayout.LayoutParams(0, dp(38), 1)
+        );
+        header.addView(
+            themeButton,
+            new LinearLayout.LayoutParams(dp(85), dp(38))
+        );
+        header.addView(
+            close,
+            new LinearLayout.LayoutParams(dp(38), dp(38))
+        );
 
         root.addView(header);
 
         themeButton.setOnClickListener(v -> changeTheme());
         close.setOnClickListener(v -> hidePanel());
 
-        LinearLayout engines = new LinearLayout(this);
-        engines.setOrientation(LinearLayout.HORIZONTAL);
-
+        // Google saja
         Button google = new Button(this);
         google.setText("Google");
-        google.setTextColor(WHITE);
+        google.setTextColor(Color.WHITE);
+        google.setBackgroundTintList(
+            android.content.res.ColorStateList.valueOf(BLUE)
+        );
 
-        Button duck = new Button(this);
-        duck.setText("DuckDuckGo");
-        duck.setTextColor(WHITE);
-
-        LinearLayout.LayoutParams p1 =
-            new LinearLayout.LayoutParams(0, dp(42), 1);
-        p1.rightMargin = dp(4);
-        engines.addView(google, p1);
-
-        LinearLayout.LayoutParams p2 =
-            new LinearLayout.LayoutParams(0, dp(42), 1);
-        p2.leftMargin = dp(4);
-        engines.addView(duck, p2);
-
-        root.addView(engines);
+        LinearLayout.LayoutParams googleParams =
+            new LinearLayout.LayoutParams(-1, dp(42));
+        googleParams.topMargin = dp(4);
+        root.addView(google, googleParams);
 
         searchInput = new EditText(this);
         searchInput.setSingleLine(true);
@@ -300,7 +323,9 @@ public class MainActivity extends Activity {
         searchInput.setPadding(dp(12), 0, dp(12), 0);
         searchInput.setBackground(rounded(PANEL, 10));
         searchInput.setImeOptions(EditorInfo.IME_ACTION_GO);
-        searchInput.setText(prefs.getString("last_query", ""));
+        searchInput.setText(
+            prefs.getString("last_query", "")
+        );
 
         LinearLayout.LayoutParams inputParams =
             new LinearLayout.LayoutParams(-1, dp(48));
@@ -309,7 +334,7 @@ public class MainActivity extends Activity {
 
         Button search = new Button(this);
         search.setText("Cari / Buka");
-        search.setTextColor(WHITE);
+        search.setTextColor(Color.WHITE);
         search.setBackgroundTintList(
             android.content.res.ColorStateList.valueOf(BLUE)
         );
@@ -366,6 +391,24 @@ public class MainActivity extends Activity {
             }
         });
 
+        // Tombol matikan FloatApp
+        Button stopButton = new Button(this);
+        stopButton.setText("Matikan FloatApp");
+        stopButton.setTextColor(Color.WHITE);
+        stopButton.setTextSize(13);
+        stopButton.setBackgroundTintList(
+            android.content.res.ColorStateList.valueOf(
+                Color.rgb(210, 55, 55)
+            )
+        );
+
+        LinearLayout.LayoutParams stopParams =
+            new LinearLayout.LayoutParams(-1, dp(42));
+        stopParams.topMargin = dp(5);
+        root.addView(stopButton, stopParams);
+
+        stopButton.setOnClickListener(v -> stopFloatApp());
+
         TextView info = new TextView(this);
         info.setText("Filter iklan aktif");
         info.setTextColor(MUTED);
@@ -383,8 +426,9 @@ public class MainActivity extends Activity {
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public WebResourceResponse shouldInterceptRequest(
-                WebView view, WebResourceRequest request) {
-
+                WebView view,
+                WebResourceRequest request
+            ) {
                 if (isAdHost(request.getUrl().getHost())) {
                     return emptyResponse();
                 }
@@ -396,8 +440,8 @@ public class MainActivity extends Activity {
             public void onReceivedError(
                 WebView view,
                 WebResourceRequest request,
-                WebResourceError error) {
-
+                WebResourceError error
+            ) {
                 super.onReceivedError(view, request, error);
 
                 if (request.isForMainFrame()) {
@@ -432,33 +476,23 @@ public class MainActivity extends Activity {
         webParams.topMargin = dp(2);
         root.addView(webView, webParams);
 
-        updateEngineButtons(google, duck);
-
-        google.setOnClickListener(v -> {
-            useDuckDuckGo = false;
-            prefs.edit().putBoolean("duckduckgo", false).apply();
-            updateEngineButtons(google, duck);
-            webView.loadUrl("https://www.google.com");
-        });
-
-        duck.setOnClickListener(v -> {
-            useDuckDuckGo = true;
-            prefs.edit().putBoolean("duckduckgo", true).apply();
-            updateEngineButtons(google, duck);
-            webView.loadUrl("https://duckduckgo.com");
-        });
+        google.setOnClickListener(v ->
+            webView.loadUrl("https://www.google.com")
+        );
 
         search.setOnClickListener(v -> performSearch());
 
-        searchInput.setOnEditorActionListener((v, actionId, event) -> {
-            if (actionId == EditorInfo.IME_ACTION_GO ||
-                (event != null &&
-                 event.getKeyCode() == KeyEvent.KEYCODE_ENTER)) {
-                performSearch();
-                return true;
+        searchInput.setOnEditorActionListener(
+            (v, actionId, event) -> {
+                if (actionId == EditorInfo.IME_ACTION_GO ||
+                    (event != null &&
+                     event.getKeyCode() == KeyEvent.KEYCODE_ENTER)) {
+                    performSearch();
+                    return true;
+                }
+                return false;
             }
-            return false;
-        });
+        );
 
         panelView = root;
 
@@ -481,32 +515,20 @@ public class MainActivity extends Activity {
 
             if (!lastUrl.isEmpty()) {
                 webView.loadUrl(lastUrl);
-            } else if (useDuckDuckGo) {
-                webView.loadUrl("https://duckduckgo.com");
             } else {
                 webView.loadUrl("https://www.google.com");
             }
 
             updateHistoryButtons();
+
         } catch (Exception e) {
             panelView = null;
-            Toast.makeText(this, "Panel gagal dibuka",
-                Toast.LENGTH_SHORT).show();
+            Toast.makeText(
+                this,
+                "Panel gagal dibuka",
+                Toast.LENGTH_SHORT
+            ).show();
         }
-    }
-
-    private void updateEngineButtons(Button google, Button duck) {
-        google.setBackgroundTintList(
-            android.content.res.ColorStateList.valueOf(
-                useDuckDuckGo ? PANEL : BLUE
-            )
-        );
-
-        duck.setBackgroundTintList(
-            android.content.res.ColorStateList.valueOf(
-                useDuckDuckGo ? BLUE : PANEL
-            )
-        );
     }
 
     private void performSearch() {
@@ -522,10 +544,9 @@ public class MainActivity extends Activity {
             url = query;
         } else if (query.contains(".") && !query.contains(" ")) {
             url = "https://" + query;
-        } else if (useDuckDuckGo) {
-            url = "https://duckduckgo.com/?q=" + Uri.encode(query);
         } else {
-            url = "https://www.google.com/search?q=" + Uri.encode(query);
+            url = "https://www.google.com/search?q=" +
+                Uri.encode(query);
         }
 
         saveValue("last_query", query);
@@ -533,10 +554,14 @@ public class MainActivity extends Activity {
         webView.loadUrl(url);
 
         InputMethodManager imm =
-            (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+            (InputMethodManager) getSystemService(
+                Context.INPUT_METHOD_SERVICE
+            );
 
         if (imm != null) {
-            imm.hideSoftInputFromWindow(searchInput.getWindowToken(), 0);
+            imm.hideSoftInputFromWindow(
+                searchInput.getWindowToken(), 0
+            );
         }
     }
 
@@ -570,8 +595,10 @@ public class MainActivity extends Activity {
             } catch (Exception ignored) {}
         }
 
+        floatingButton = null;
         buttonAdded = false;
+
         super.onDestroy();
     }
-                }
-                
+                          }
+    
